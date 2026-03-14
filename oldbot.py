@@ -653,7 +653,6 @@ last_incidents = {}  # храним последние события по ма�
 notified_start = set()
 
 def format_incident_message(incident, home_team, away_team, match_id):
-    """Форматирует сообщение о событии для отправки пользователю"""
     inc_type = incident["type"]
     player = incident.get("player", "Неизвестно")
     minute = incident.get("minute", "")
@@ -662,7 +661,7 @@ def format_incident_message(incident, home_team, away_team, match_id):
         if incident.get("own_goal"):
             return f"⚽ АВТОГОЛ!\n{player} ({home_team if incident['team'] == home_team else away_team})\nМинута: {minute}"
         elif incident.get("penalty"):
-            return f⚽ ПЕНАЛЬТИ ЗАБИТ!\n{player} ({incident['team']})\nМинута: {minute}"
+            return f"⚽ ПЕНАЛЬТИ ЗАБИТ!\n{player} ({incident['team']})\nМинута: {minute}"
         else:
             return f"⚽ ГОЛ!\n{player} ({incident['team']})\nМинута: {minute}"
     elif inc_type == "yellow_card":
