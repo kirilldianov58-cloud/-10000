@@ -9,12 +9,16 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# ================== НАСТРОЙКИ ==================
+# ================== НАСТРОЙКИ (читаются из переменных окружения) ==================
+TELEGRAM_TOKEN = os.environ.get("7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE")
+FOOTBALL_DATA_TOKEN = os.environ.get("ec0171bdf2db4f6baf095fb95ce0deb0")
+BSD_API_TOKEN = os.environ.get("658732b3608784390666f3db24627a802add0692")
 
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE")
-FOOTBALL_DATA_TOKEN = os.environ.get("FOOTBALL_DATA_TOKEN", "ec0171bdf2db4f6baf095fb95ce0deb0")
-BSD_API_TOKEN = os.environ.get("658732b3608784390666f3db24627a802add0692")  # Токен для Bzzoiro Sports Data (обязательно)
-
+# Проверяем, что все токены заданы
+if not TELEGRAM_TOKEN:
+    raise ValueError("❌ TELEGRAM_TOKEN не задан! Добавьте его в переменные окружения.")
+if not FOOTBALL_DATA_TOKEN:
+    raise ValueError("❌ FOOTBALL_DATA_TOKEN не задан! Добавьте его в переменные окружения.")
 if not BSD_API_TOKEN:
     raise ValueError("❌ BSD_API_TOKEN не задан! Добавьте его в переменные окружения.")
 
@@ -27,11 +31,10 @@ LEAGUES = {
     "ucl": {"id": "CL", "name": "Лига Чемпионов", "logo": "🏆"}
 }
 
-# Кэш для разных типов данных (оставляем только для таблиц и матчей, live не кэшируем)
+# Кэш для таблиц и расписания (live данные не кэшируем)
 cache = {
     'standings': TTLCache(maxsize=50, ttl=900),
     'matches': TTLCache(maxsize=100, ttl=300),
-    # 'live' убираем, т.к. BSD будет давать свежие данные
 }
 
 # Часовые пояса
@@ -107,7 +110,6 @@ async def fetch_standings(competition_id):
 # ================== ФУНКЦИИ ДЛЯ РАБОТЫ С BZZOIRO SPORTS DATA (BSD) ==================
 
 async def fetch_live_matches_bsd():
-    """Получает список live-матчей с событиями (голы, карточки)"""
     url = "https://sports.bzzoiro.com/api/live/"
     headers = {"Authorization": f"Token {BSD_API_TOKEN}"}
     try:
@@ -121,12 +123,14 @@ async def fetch_live_matches_bsd():
                     processed_incidents = []
                     for inc in incidents:
                         processed_incidents.append({
-                            "type": inc.get("type"),  # "goal", "yellow_card", "red_card", "penalty", "own_goal"
+                            "type": inc.get("type"),
                             "minute": inc.get("minute"),
                             "player": inc.get("player"),
                             "team": inc.get("team"),
                             "home": inc.get("home", False),
-                            "away": inc.get("away", False)
+                            "away": inc.get("away", False),
+                            "own_goal": inc.get("own_goal", False),
+                            "penalty": inc.get("penalty", False)
                         })
                     matches.append({
                         "id": match["id"],
@@ -145,34 +149,6 @@ async def fetch_live_matches_bsd():
                 return []
     except Exception as e:
         print(f"❌ BSD live exception: {e}")
-        return []
-
-async def fetch_incidents_bsd(match_id=None):
-    """Получает события конкретного матча (если match_id указан) или все последние события"""
-    url = "https://sports.bzzoiro.com/api/incidents/"
-    headers = {"Authorization": f"Token {BSD_API_TOKEN}"}
-    params = {}
-    if match_id:
-        params["match_id"] = match_id
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers=headers, params=params)
-            if resp.status_code == 200:
-                data = resp.json()
-                incidents = data.get("incidents", [])
-                processed = []
-                for inc in incidents:
-                    processed.append({
-                        "type": inc.get("type"),
-                        "minute": inc.get("minute"),
-                        "player": inc.get("player"),
-                        "team": inc.get("team"),
-                        "match_id": inc.get("match_id")
-                    })
-                return processed
-            return []
-    except Exception as e:
-        print(f"❌ BSD incidents error: {e}")
         return []
 
 # ================== ВРЕМЯ ==================
@@ -245,7 +221,7 @@ def main_menu():
          InlineKeyboardButton("🇮🇹 Серия А", callback_data="league_seriea")],
         [InlineKeyboardButton("🏆 Лига Чемпионов", callback_data="league_ucl")],
         [InlineKeyboardButton("🔴 LIVE матчи", callback_data="live")],
-        [InlineKeyboardButton("⚽ LIVE статистика", callback_data="goal_live")],  # переименовано
+        [InlineKeyboardButton("⚽ LIVE статистика", callback_data="goal_live")],
         [InlineKeyboardButton("⭐ Мои подписки", callback_data="my_subs")]
     ])
 
@@ -276,7 +252,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# ================== МАТЧИ ЗА 48 ЧАСОВ (остаётся на football-data.org) ==================
+# ================== МАТЧИ ЗА 48 ЧАСОВ ==================
 
 async def matches_next_48h(update, league_key):
     user = update.from_user
@@ -333,7 +309,7 @@ async def matches_next_48h(update, league_key):
     else:
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-# ================== ТАБЛИЦА (остаётся на football-data.org) ==================
+# ================== ТАБЛИЦА ==================
 
 async def show_table(update, league_key):
     user = update.from_user
@@ -395,7 +371,6 @@ async def live_matches(update):
         league_name = match["league"]
         home = match["home_team"]
         away = match["away_team"]
-        status = match["status"]
         score_h = match["score_home"]
         score_a = match["score_away"]
         minute = match["minute"]
@@ -647,31 +622,34 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-# ================== ФОНОВАЯ ЗАДАЧА ПРОВЕРКИ МАТЧЕЙ (BSD) ==================
+# ================== ФОРМАТИРОВАНИЕ СООБЩЕНИЙ О СОБЫТИЯХ ==================
 
-last_incidents = {}  # храним последние события по матчам, чтобы не дублировать уведомления
-notified_start = set()
-
-def format_incident_message(incident, home_team, away_team, match_id):
+def format_incident_message(incident, home_team, away_team):
     inc_type = incident["type"]
     player = incident.get("player", "Неизвестно")
     minute = incident.get("minute", "")
+    team = incident.get("team", "")
     
     if inc_type == "goal":
         if incident.get("own_goal"):
-            return f"⚽ АВТОГОЛ!\n{player} ({home_team if incident['team'] == home_team else away_team})\nМинута: {minute}"
+            return f"⚽ АВТОГОЛ!\n{player} ({team})\nМинута: {minute}"
         elif incident.get("penalty"):
-            return f"⚽ ПЕНАЛЬТИ ЗАБИТ!\n{player} ({incident['team']})\nМинута: {minute}"
+            return f"⚽ ПЕНАЛЬТИ ЗАБИТ!\n{player} ({team})\nМинута: {minute}"
         else:
-            return f"⚽ ГОЛ!\n{player} ({incident['team']})\nМинута: {minute}"
+            return f"⚽ ГОЛ!\n{player} ({team})\nМинута: {minute}"
     elif inc_type == "yellow_card":
-        return f"🟨 ЖЕЛТАЯ КАРТОЧКА\n{player} ({incident['team']})\nМинута: {minute}"
+        return f"🟨 ЖЕЛТАЯ КАРТОЧКА\n{player} ({team})\nМинута: {minute}"
     elif inc_type == "red_card":
-        return f"🟥 КРАСНАЯ КАРТОЧКА\n{player} ({incident['team']})\nМинута: {minute}"
+        return f"🟥 КРАСНАЯ КАРТОЧКА\n{player} ({team})\nМинута: {minute}"
     elif inc_type == "second_yellow":
-        return f"🟨🟨 ВТОРАЯ ЖЕЛТАЯ -> КРАСНАЯ\n{player} ({incident['team']})\nМинута: {minute}"
+        return f"🟨🟨 ВТОРАЯ ЖЕЛТАЯ -> КРАСНАЯ\n{player} ({team})\nМинута: {minute}"
     else:
         return None
+
+# ================== ФОНОВАЯ ЗАДАЧА ПРОВЕРКИ МАТЧЕЙ (BSD) ==================
+
+last_incidents = {}
+notified_start = set()
 
 async def match_checker(app):
     print("🔄 Запущен проверщик матчей (BSD с детальными событиями)")
@@ -684,17 +662,14 @@ async def match_checker(app):
                 away = match["away_team"]
                 incidents = match["incidents"]
                 
-                # Для каждого инцидента проверяем, отправляли ли мы его уже
                 for inc in incidents:
-                    # Создаём уникальный ключ для события (матч + минута + тип + игрок)
-                    inc_key = f"{fixture_id}_{inc['minute']}_{inc['type']}_{inc['player']}"
+                    inc_key = f"{fixture_id}_{inc['minute']}_{inc['type']}_{inc.get('player', '')}"
                     
                     if inc_key not in last_incidents:
-                        # Отправляем подписчикам этого матча
                         cursor.execute("SELECT user_id FROM goal_subscriptions WHERE match_id=?", (fixture_id,))
                         users = cursor.fetchall()
                         if users:
-                            message_text = format_incident_message(inc, home, away, fixture_id)
+                            message_text = format_incident_message(inc, home, away)
                             if message_text:
                                 for (user_id,) in users:
                                     try:
@@ -705,10 +680,8 @@ async def match_checker(app):
                                         )
                                     except Exception as e:
                                         print(f"Ошибка отправки уведомления: {e}")
-                        # Запоминаем, что отправили
                         last_incidents[inc_key] = True
                 
-                # Уведомление о старте матча (если статус LIVE и ещё не отправляли)
                 if match["status"] == "LIVE" and fixture_id not in notified_start:
                     cursor.execute("SELECT user_id FROM goal_subscriptions WHERE match_id=?", (fixture_id,))
                     users = cursor.fetchall()
@@ -726,11 +699,11 @@ async def match_checker(app):
         except Exception as e:
             print(f"Ошибка в match_checker: {e}")
         
-        await asyncio.sleep(30)  # проверяем каждые 30 секунд
+        await asyncio.sleep(30)
 
 # ================== СТАТИСТИКА (ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА) ==================
 
-OWNER_ID = 6298119477  # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID
+OWNER_ID = 123456789  # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID (узнайте у @userinfobot)
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
