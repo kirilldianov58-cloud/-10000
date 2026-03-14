@@ -1,6 +1,5 @@
 import asyncio
 import sqlite3
-import os
 from datetime import datetime, timedelta
 import httpx
 from cachetools import TTLCache
@@ -9,18 +8,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# ================== НАСТРОЙКИ (читаются из переменных окружения) ==================
-TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"
-FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6baf095fb95ce0deb0"
+# ================== НАСТРОЙКИ (токены прямо в коде) ==================
+TELEGRAM_TOKEN = "7728656883:AAEme21mHObvqMOoifogEYRiy3LTyk2W5bE"
+FOOTBALL_DATA_TOKEN = "ec0171bd4f2db4f6ba9f95fb95ce0deb0"
 BSD_API_TOKEN = "658732b3608784390666f3db24627a802add0692"
-
-# Проверяем, что все токены заданы
-if not TELEGRAM_TOKEN:
-    raise ValueError("❌ TELEGRAM_TOKEN не задан! Добавьте его в переменные окружения.")
-if not FOOTBALL_DATA_TOKEN:
-    raise ValueError("❌ FOOTBALL_DATA_TOKEN не задан! Добавьте его в переменные окружения.")
-if not BSD_API_TOKEN:
-    raise ValueError("❌ BSD_API_TOKEN не задан! Добавьте его в переменные окружения.")
 
 # ID лиг в football-data.org
 LEAGUES = {
@@ -31,7 +22,30 @@ LEAGUES = {
     "ucl": {"id": "CL", "name": "Лига Чемпионов", "logo": "🏆"}
 }
 
-# Кэш для таблиц и расписания (live данные не кэшируем)
+# Словарь перевода названий команд на русский
+TEAM_TRANSLATIONS = {
+    "Real Madrid": "Реал Мадрид",
+    "Elche": "Эльче",
+    "West Ham United": "Вест Хэм Юнайтед",
+    "Manchester City": "Манчестер Сити",
+    "KVC Westerlo": "Вестерло",
+    "Club Brugge KV": "Брюгге",
+    "Kilmarnock": "Килмарнок",
+    "Heart of Midlothian": "Хартс",
+    "AFC Ajax": "Аякс",
+    "Sparta Rotterdam": "Спарта Роттердам",
+    "AS Monaco": "Монако",
+    "Stade Brestois": "Брест",
+    "Vitória": "Витория",
+    "Atlético Mineiro": "Атлетико Минейро",
+    # Добавляйте другие команды по мере необходимости
+}
+
+def translate_team(name):
+    """Возвращает русское название команды, если есть в словаре, иначе оригинал."""
+    return TEAM_TRANSLATIONS.get(name, name)
+
+# Кэш для таблиц и расписания
 cache = {
     'standings': TTLCache(maxsize=50, ttl=900),
     'matches': TTLCache(maxsize=100, ttl=300),
@@ -42,7 +56,6 @@ UTC_TZ = pytz.UTC
 MSK_TZ = pytz.timezone('Europe/Moscow')
 
 # ================== БАЗА ДАННЫХ ==================
-
 conn = sqlite3.connect("football_bot.db", check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS subscriptions (user_id INTEGER, team TEXT)")
@@ -57,7 +70,6 @@ cursor.execute("CREATE TABLE IF NOT EXISTS users ("
 conn.commit()
 
 # ================== ФУНКЦИИ ДЛЯ РАБОТЫ С FOOTBALL-DATA.ORG ==================
-
 async def fetch_matches(competition_id, date_from, date_to):
     cache_key = f"matches_{competition_id}_{date_from}_{date_to}"
     if cache_key in cache['matches']:
@@ -108,7 +120,6 @@ async def fetch_standings(competition_id):
         return []
 
 # ================== ФУНКЦИИ ДЛЯ РАБОТЫ С BZZOIRO SPORTS DATA (BSD) ==================
-
 async def fetch_live_matches_bsd():
     url = "https://sports.bzzoiro.com/api/live/"
     headers = {"Authorization": f"Token {BSD_API_TOKEN}"}
@@ -119,6 +130,24 @@ async def fetch_live_matches_bsd():
                 data = resp.json()
                 matches = []
                 for match in data.get("results", []):
+                    # Получаем счёт
+                    score_home = 0
+                    score_away = 0
+                    if "score" in match and isinstance(match["score"], dict):
+                        score_home = match["score"].get("home", 0)
+                        score_away = match["score"].get("away", 0)
+                    elif "scores" in match and isinstance(match["scores"], dict):
+                        score_home = match["scores"].get("home", 0)
+                        score_away = match["scores"].get("away", 0)
+
+                    # Название лиги
+                    league_data = match.get("league", {})
+                    if isinstance(league_data, dict):
+                        league_name = league_data.get("name", "Неизвестная лига")
+                    else:
+                        league_name = str(league_data)
+
+                    # События (голы, карточки)
                     incidents = match.get("incidents", [])
                     processed_incidents = []
                     for inc in incidents:
@@ -132,15 +161,16 @@ async def fetch_live_matches_bsd():
                             "own_goal": inc.get("own_goal", False),
                             "penalty": inc.get("penalty", False)
                         })
+
                     matches.append({
                         "id": match["id"],
-                        "home_team": match["home_team"],
-                        "away_team": match["away_team"],
-                        "score_home": match.get("score", {}).get("home", 0),
-                        "score_away": match.get("score", {}).get("away", 0),
+                        "home_team": translate_team(match["home_team"]),
+                        "away_team": translate_team(match["away_team"]),
+                        "score_home": score_home,
+                        "score_away": score_away,
                         "status": match.get("status", "LIVE"),
                         "minute": match.get("minute", ""),
-                        "league": match.get("league", "Неизвестная лига"),
+                        "league": league_name,
                         "incidents": processed_incidents
                     })
                 return matches
@@ -152,7 +182,6 @@ async def fetch_live_matches_bsd():
         return []
 
 # ================== ВРЕМЯ ==================
-
 def utc_to_msk(utc_time_str):
     try:
         if utc_time_str.endswith('Z'):
@@ -166,8 +195,17 @@ def utc_to_msk(utc_time_str):
         print(f"❌ Ошибка преобразования времени: {e}")
         return None
 
-# ================== ДАННЫЕ ЛИГИ ЧЕМПИОНОВ 2025/26 ==================
+# ================== СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ ==================
+async def update_user_stats(user_id, first_name=None, username=None):
+    cursor.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,))
+    if cursor.fetchone():
+        cursor.execute("UPDATE users SET last_seen = CURRENT_TIMESTAMP, commands_count = commands_count + 1 WHERE user_id = ?", (user_id,))
+    else:
+        cursor.execute("INSERT INTO users (user_id, first_name, username, commands_count) VALUES (?, ?, ?, 1)",
+                       (user_id, first_name, username))
+    conn.commit()
 
+# ================== ДАННЫЕ ЛИГИ ЧЕМПИОНОВ 2025/26 ==================
 UCL_PLAYOFF = {
     "round_of_16": {
         "name": "1/8 финала (первые матчи)",
@@ -200,19 +238,7 @@ UCL_PLAYOFF = {
     }
 }
 
-# ================== СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ ==================
-
-async def update_user_stats(user_id, first_name=None, username=None):
-    cursor.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,))
-    if cursor.fetchone():
-        cursor.execute("UPDATE users SET last_seen = CURRENT_TIMESTAMP, commands_count = commands_count + 1 WHERE user_id = ?", (user_id,))
-    else:
-        cursor.execute("INSERT INTO users (user_id, first_name, username, commands_count) VALUES (?, ?, ?, 1)",
-                       (user_id, first_name, username))
-    conn.commit()
-
 # ================== МЕНЮ ==================
-
 def main_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🏴󠁧󠁢󠁥󠁮󠁧󠁿 АПЛ", callback_data="league_apl"),
@@ -242,7 +268,6 @@ def league_menu(league_key):
         ])
 
 # ================== START ==================
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -253,7 +278,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # ================== МАТЧИ ЗА 48 ЧАСОВ ==================
-
 async def matches_next_48h(update, league_key):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -310,7 +334,6 @@ async def matches_next_48h(update, league_key):
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ================== ТАБЛИЦА ==================
-
 async def show_table(update, league_key):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -350,8 +373,7 @@ async def show_table(update, league_key):
     else:
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-# ================== LIVE МАТЧИ (ОБЩИЙ СПИСОК) ==================
-
+# ================== LIVE МАТЧИ ==================
 async def live_matches(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -383,7 +405,6 @@ async def live_matches(update):
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ================== LIVE СТАТИСТИКА (ПОДПИСКА НА СОБЫТИЯ) ==================
-
 async def goal_live_menu(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -443,7 +464,6 @@ async def goal_unsubscribe(update, match_id):
     )
 
 # ================== ЛИГА ЧЕМПИОНОВ – ПЛЕЙ-ОФФ ==================
-
 async def ucl_playoff(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -475,7 +495,6 @@ async def ucl_playoff(update):
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ================== ПОДПИСКИ (на команды) ==================
-
 async def subscribe_team(user_id, team):
     cursor.execute("SELECT * FROM subscriptions WHERE user_id=? AND team=?", (user_id, team))
     if not cursor.fetchone():
@@ -533,7 +552,6 @@ async def my_subscriptions(update, user_id):
     )
 
 # ================== ОБРАБОТЧИК КНОПОК ==================
-
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -623,31 +641,31 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 # ================== ФОРМАТИРОВАНИЕ СООБЩЕНИЙ О СОБЫТИЯХ ==================
-
 def format_incident_message(incident, home_team, away_team):
     inc_type = incident["type"]
     player = incident.get("player", "Неизвестно")
     minute = incident.get("minute", "")
     team = incident.get("team", "")
-    
+    # Переводим название команды
+    team_ru = translate_team(team)
+
     if inc_type == "goal":
         if incident.get("own_goal"):
-            return f"⚽ АВТОГОЛ!\n{player} ({team})\nМинута: {minute}"
+            return f"⚽ АВТОГОЛ!\n{player} ({team_ru})\nМинута: {minute}"
         elif incident.get("penalty"):
-            return f"⚽ ПЕНАЛЬТИ ЗАБИТ!\n{player} ({team})\nМинута: {minute}"
+            return f"⚽ ПЕНАЛЬТИ ЗАБИТ!\n{player} ({team_ru})\nМинута: {minute}"
         else:
-            return f"⚽ ГОЛ!\n{player} ({team})\nМинута: {minute}"
+            return f"⚽ ГОЛ!\n{player} ({team_ru})\nМинута: {minute}"
     elif inc_type == "yellow_card":
-        return f"🟨 ЖЕЛТАЯ КАРТОЧКА\n{player} ({team})\nМинута: {minute}"
+        return f"🟨 ЖЕЛТАЯ КАРТОЧКА\n{player} ({team_ru})\nМинута: {minute}"
     elif inc_type == "red_card":
-        return f"🟥 КРАСНАЯ КАРТОЧКА\n{player} ({team})\nМинута: {minute}"
+        return f"🟥 КРАСНАЯ КАРТОЧКА\n{player} ({team_ru})\nМинута: {minute}"
     elif inc_type == "second_yellow":
-        return f"🟨🟨 ВТОРАЯ ЖЕЛТАЯ -> КРАСНАЯ\n{player} ({team})\nМинута: {minute}"
+        return f"🟨🟨 ВТОРАЯ ЖЕЛТАЯ -> КРАСНАЯ\n{player} ({team_ru})\nМинута: {minute}"
     else:
         return None
 
 # ================== ФОНОВАЯ ЗАДАЧА ПРОВЕРКИ МАТЧЕЙ (BSD) ==================
-
 last_incidents = {}
 notified_start = set()
 
@@ -661,10 +679,10 @@ async def match_checker(app):
                 home = match["home_team"]
                 away = match["away_team"]
                 incidents = match["incidents"]
-                
+
                 for inc in incidents:
+                    # Уникальный ключ события
                     inc_key = f"{fixture_id}_{inc['minute']}_{inc['type']}_{inc.get('player', '')}"
-                    
                     if inc_key not in last_incidents:
                         cursor.execute("SELECT user_id FROM goal_subscriptions WHERE match_id=?", (fixture_id,))
                         users = cursor.fetchall()
@@ -681,7 +699,8 @@ async def match_checker(app):
                                     except Exception as e:
                                         print(f"Ошибка отправки уведомления: {e}")
                         last_incidents[inc_key] = True
-                
+
+                # Уведомление о старте матча
                 if match["status"] == "LIVE" and fixture_id not in notified_start:
                     cursor.execute("SELECT user_id FROM goal_subscriptions WHERE match_id=?", (fixture_id,))
                     users = cursor.fetchall()
@@ -695,15 +714,14 @@ async def match_checker(app):
                         except Exception as e:
                             print(f"Ошибка отправки уведомления о старте: {e}")
                     notified_start.add(fixture_id)
-                    
+
         except Exception as e:
             print(f"Ошибка в match_checker: {e}")
-        
-        await asyncio.sleep(30)
+
+        await asyncio.sleep(30)  # проверка каждые 30 секунд
 
 # ================== СТАТИСТИКА (ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА) ==================
-
-OWNER_ID = 123456789  # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID (узнайте у @userinfobot)
+OWNER_ID = 6298119477 # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID (узнайте у @userinfobot)
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -746,7 +764,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ================== ЗАПУСК ==================
-
 def main():
     print("=" * 60)
     print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (гибрид: football-data.org + BSD)")
