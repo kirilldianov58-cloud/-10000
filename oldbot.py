@@ -10,8 +10,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 
 # ================== НАСТРОЙКИ ==================
 TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"  # правильный токен
-FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6baf095fb95ce0deb0"
-BSD_API_TOKEN = "658732b3608784390666f3db24627a802add0692"
+FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6baf095fb95ce0deb0"  # токен football-data.org
 
 # ID лиг в football-data.org
 LEAGUES = {
@@ -22,7 +21,7 @@ LEAGUES = {
     "ucl": {"id": "CL", "name": "Лига Чемпионов", "logo": "🏆"}
 }
 
-# Словарь перевода названий команд на русский
+# Словарь перевода названий команд на русский (можно дополнять)
 TEAM_TRANSLATIONS = {
     "Real Madrid": "Реал Мадрид",
     "Elche": "Эльче",
@@ -47,6 +46,7 @@ def translate_team(name):
 cache = {
     'standings': TTLCache(maxsize=50, ttl=900),
     'matches': TTLCache(maxsize=100, ttl=300),
+    'live': TTLCache(maxsize=20, ttl=30),
 }
 
 # Часовые пояса
@@ -67,7 +67,7 @@ cursor.execute("CREATE TABLE IF NOT EXISTS users ("
                "commands_count INTEGER DEFAULT 0)")
 conn.commit()
 
-# ================== ФУНКЦИИ ДЛЯ РАБОТЫ С FOOTBALL-DATA.ORG ==================
+# ================== ФУНКЦИИ ДЛЯ РАБОТЫ С API ==================
 async def fetch_matches(competition_id, date_from, date_to):
     cache_key = f"matches_{competition_id}_{date_from}_{date_to}"
     if cache_key in cache['matches']:
@@ -117,82 +117,27 @@ async def fetch_standings(competition_id):
         print(f"❌ Ошибка standings: {e}")
         return []
 
-# ================== ФУНКЦИИ ДЛЯ РАБОТЫ С BZZOIRO SPORTS DATA (BSD) ==================
-async def fetch_live_matches_bsd():
-    url = "https://sports.bzzoiro.com/api/live/"
-    headers = {"Authorization": f"Token {BSD_API_TOKEN}"}
+async def fetch_live_matches():
+    cache_key = "live_matches"
+    if cache_key in cache['live']:
+        return cache['live'][cache_key]
+
+    url = "https://api.football-data.org/v4/matches"
+    params = {"status": "LIVE"}
+    headers = {"X-Auth-Token": FOOTBALL_DATA_TOKEN}
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers=headers)
+            resp = await client.get(url, headers=headers, params=params)
             if resp.status_code == 200:
                 data = resp.json()
-                # Отладочный вывод первого матча
-                if data.get("results") and len(data["results"]) > 0:
-                    print("🔍 Сырой ответ первого матча:")
-                    print(data["results"][0])
-                
-                matches = []
-                for match in data.get("results", []):
-                    # Пытаемся получить счёт из разных мест
-                    score_home = 0
-                    score_away = 0
-                    
-                    # Вариант 1: поле "score"
-                    if "score" in match and isinstance(match["score"], dict):
-                        score_home = match["score"].get("home", 0)
-                        score_away = match["score"].get("away", 0)
-                    # Вариант 2: поле "scores"
-                    elif "scores" in match and isinstance(match["scores"], dict):
-                        score_home = match["scores"].get("home", 0)
-                        score_away = match["scores"].get("away", 0)
-                    # Вариант 3: из инцидентов (голы) – считаем количество голов по событиям
-                    else:
-                        incidents = match.get("incidents", [])
-                        home_goals = sum(1 for inc in incidents if inc.get("type") == "goal" and inc.get("home"))
-                        away_goals = sum(1 for inc in incidents if inc.get("type") == "goal" and inc.get("away"))
-                        if home_goals > 0 or away_goals > 0:
-                            score_home = home_goals
-                            score_away = away_goals
-
-                    # Название лиги
-                    league_data = match.get("league", {})
-                    if isinstance(league_data, dict):
-                        league_name = league_data.get("name", "Неизвестная лига")
-                    else:
-                        league_name = str(league_data)
-
-                    # События (голы, карточки)
-                    incidents = match.get("incidents", [])
-                    processed_incidents = []
-                    for inc in incidents:
-                        processed_incidents.append({
-                            "type": inc.get("type"),
-                            "minute": inc.get("minute"),
-                            "player": inc.get("player"),
-                            "team": inc.get("team"),
-                            "home": inc.get("home", False),
-                            "away": inc.get("away", False),
-                            "own_goal": inc.get("own_goal", False),
-                            "penalty": inc.get("penalty", False)
-                        })
-
-                    matches.append({
-                        "id": match["id"],
-                        "home_team": translate_team(match["home_team"]),
-                        "away_team": translate_team(match["away_team"]),
-                        "score_home": score_home,
-                        "score_away": score_away,
-                        "status": match.get("status", "LIVE"),
-                        "minute": match.get("minute", ""),
-                        "league": league_name,
-                        "incidents": processed_incidents
-                    })
+                matches = data.get("matches", [])
+                cache['live'][cache_key] = matches
                 return matches
             else:
-                print(f"⚠️ BSD live error: {resp.status_code}")
+                print(f"⚠️ Ошибка API live: {resp.status_code}")
                 return []
     except Exception as e:
-        print(f"❌ BSD live exception: {e}")
+        print(f"❌ Ошибка запроса live: {e}")
         return []
 
 # ================== ВРЕМЯ ==================
@@ -387,12 +332,12 @@ async def show_table(update, league_key):
     else:
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-# ================== LIVE МАТЧИ ==================
+# ================== LIVE МАТЧИ (ОБЩИЙ СПИСОК) ==================
 async def live_matches(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
 
-    matches = await fetch_live_matches_bsd()
+    matches = await fetch_live_matches()
 
     if not matches:
         await update.message.reply_text(
@@ -404,23 +349,27 @@ async def live_matches(update):
 
     text = "🔴 <b>LIVE МАТЧИ</b>\n\n"
     for match in matches:
-        league_name = match["league"]
-        home = match["home_team"]
-        away = match["away_team"]
-        score_h = match["score_home"]
-        score_a = match["score_away"]
-        minute = match["minute"]
+        league_name = match.get("competition", {}).get("name", "Неизвестная лига")
+        home = match["homeTeam"]["name"]
+        away = match["awayTeam"]["name"]
         status = match["status"]
-
-        # Добавим отметку о завершении
-        if status == "FINISHED":
-            status_text = "✅ Завершён"
+        score_h = match["score"]["fullTime"]["home"] or match["score"]["halfTime"]["home"] or 0
+        score_a = match["score"]["fullTime"]["away"] or match["score"]["halfTime"]["away"] or 0
+        minute = match.get("minute", "")
+        if not minute and "IN_PLAY" in status:
+            minute = "идет"
+        elif status == "PAUSED":
+            minute = "перерыв"
         else:
-            status_text = f"⏱ {minute}'" if minute else ""
+            minute = ""
 
-        text += f"⚽ <b>{home}</b> {score_h}–{score_a} <b>{away}</b>"
-        if status_text:
-            text += f"  {status_text}"
+        # перевод команд
+        home_ru = translate_team(home)
+        away_ru = translate_team(away)
+
+        text += f"⚽ <b>{home_ru}</b> {score_h}–{score_a} <b>{away_ru}</b>"
+        if minute:
+            text += f"  ({minute})"
         text += f"\n   <i>{league_name}</i>\n\n"
 
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
@@ -430,7 +379,7 @@ async def goal_live_menu(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
 
-    matches = await fetch_live_matches_bsd()
+    matches = await fetch_live_matches()
     if not matches:
         await update.message.reply_text(
             "⚽ <b>LIVE статистика</b>\n\n<i>Сейчас нет матчей в прямом эфире</i>",
@@ -443,12 +392,14 @@ async def goal_live_menu(update):
     keyboard = []
     for match in matches:
         match_id = match["id"]
-        home = match["home_team"]
-        away = match["away_team"]
-        league = match["league"]
-        text += f"• {home} vs {away} ({league})\n"
+        home = match["homeTeam"]["name"]
+        away = match["awayTeam"]["name"]
+        league = match.get("competition", {}).get("name", "Неизвестная лига")
+        home_ru = translate_team(home)
+        away_ru = translate_team(away)
+        text += f"• {home_ru} vs {away_ru} ({league})\n"
         keyboard.append([InlineKeyboardButton(
-            f"🔔 {home} – {away}",
+            f"🔔 {home_ru} – {away_ru}",
             callback_data=f"goal_sub_{match_id}"
         )])
     keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")])
@@ -661,65 +612,26 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-# ================== ФОРМАТИРОВАНИЕ СООБЩЕНИЙ О СОБЫТИЯХ ==================
-def format_incident_message(incident, home_team, away_team):
-    inc_type = incident["type"]
-    player = incident.get("player", "Неизвестно")
-    minute = incident.get("minute", "")
-    team = incident.get("team", "")
-    team_ru = translate_team(team)
-
-    if inc_type == "goal":
-        if incident.get("own_goal"):
-            return f"⚽ АВТОГОЛ!\n{player} ({team_ru})\nМинута: {minute}"
-        elif incident.get("penalty"):
-            return f"⚽ ПЕНАЛЬТИ ЗАБИТ!\n{player} ({team_ru})\nМинута: {minute}"
-        else:
-            return f"⚽ ГОЛ!\n{player} ({team_ru})\nМинута: {minute}"
-    elif inc_type == "yellow_card":
-        return f"🟨 ЖЕЛТАЯ КАРТОЧКА\n{player} ({team_ru})\nМинута: {minute}"
-    elif inc_type == "red_card":
-        return f"🟥 КРАСНАЯ КАРТОЧКА\n{player} ({team_ru})\nМинута: {minute}"
-    elif inc_type == "second_yellow":
-        return f"🟨🟨 ВТОРАЯ ЖЕЛТАЯ -> КРАСНАЯ\n{player} ({team_ru})\nМинута: {minute}"
-    else:
-        return None
-
 # ================== ФОНОВАЯ ЗАДАЧА ПРОВЕРКИ МАТЧЕЙ ==================
-last_incidents = {}
+last_scores = {}
 notified_start = set()
 
 async def match_checker(app):
-    print("🔄 Запущен проверщик матчей (BSD с детальными событиями)")
+    print("🔄 Запущен проверщик матчей (football-data.org)")
     while True:
         try:
-            matches = await fetch_live_matches_bsd()
+            matches = await fetch_live_matches()
             for match in matches:
                 fixture_id = match["id"]
-                home = match["home_team"]
-                away = match["away_team"]
-                incidents = match["incidents"]
+                home = match["homeTeam"]["name"]
+                away = match["awayTeam"]["name"]
+                status = match["status"]
+                hs = match["score"]["fullTime"]["home"] or match["score"]["halfTime"]["home"] or 0
+                aw = match["score"]["fullTime"]["away"] or match["score"]["halfTime"]["away"] or 0
+                score = f"{hs}-{aw}"
 
-                for inc in incidents:
-                    inc_key = f"{fixture_id}_{inc['minute']}_{inc['type']}_{inc.get('player', '')}"
-                    if inc_key not in last_incidents:
-                        cursor.execute("SELECT user_id FROM goal_subscriptions WHERE match_id=?", (fixture_id,))
-                        users = cursor.fetchall()
-                        if users:
-                            message_text = format_incident_message(inc, home, away)
-                            if message_text:
-                                for (user_id,) in users:
-                                    try:
-                                        await app.bot.send_message(
-                                            chat_id=user_id,
-                                            text=message_text,
-                                            parse_mode=ParseMode.HTML
-                                        )
-                                    except Exception as e:
-                                        print(f"Ошибка отправки уведомления: {e}")
-                        last_incidents[inc_key] = True
-
-                if match["status"] == "LIVE" and fixture_id not in notified_start:
+                # Уведомление о старте матча
+                if status in ["IN_PLAY", "LIVE"] and fixture_id not in notified_start:
                     cursor.execute("SELECT user_id FROM goal_subscriptions WHERE match_id=?", (fixture_id,))
                     users = cursor.fetchall()
                     for (user_id,) in users:
@@ -733,13 +645,32 @@ async def match_checker(app):
                             print(f"Ошибка отправки уведомления о старте: {e}")
                     notified_start.add(fixture_id)
 
+                # Уведомление о голе
+                if fixture_id not in last_scores:
+                    last_scores[fixture_id] = score
+
+                if last_scores[fixture_id] != score:
+                    cursor.execute("SELECT user_id FROM goal_subscriptions WHERE match_id=?", (fixture_id,))
+                    users = cursor.fetchall()
+                    # Определим, какая команда забила (просто покажем новый счёт)
+                    for (user_id,) in users:
+                        try:
+                            await app.bot.send_message(
+                                chat_id=user_id,
+                                text=f"⚽ <b>ГОЛ!</b>\n\n{home} {hs}-{aw} {away}",
+                                parse_mode=ParseMode.HTML
+                            )
+                        except Exception as e:
+                            print(f"Ошибка отправки уведомления о голе: {e}")
+                    last_scores[fixture_id] = score
+
         except Exception as e:
             print(f"Ошибка в match_checker: {e}")
 
         await asyncio.sleep(30)
 
 # ================== СТАТИСТИКА (ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА) ==================
-OWNER_ID = 123456789  # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID
+OWNER_ID = 6298119477  # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -784,11 +715,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================== ЗАПУСК ==================
 def main():
     print("=" * 60)
-    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (гибрид: football-data.org + BSD)")
+    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (только football-data.org)")
     print("=" * 60)
     print("✅ Таблицы и расписание: football-data.org")
-    print("✅ Live-матчи и события: Bzzoiro Sports Data")
-    print("✅ Детальные уведомления: голы (автор, пенальти, автогол), карточки")
+    print("✅ Live-матчи и события: football-data.org")
+    print("✅ Уведомления о голах (по изменению счёта)")
     print("=" * 60)
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
