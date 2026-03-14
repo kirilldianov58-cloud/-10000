@@ -10,9 +10,9 @@ from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # ================== НАСТРОЙКИ (читаются из переменных окружения) ==================
-TELEGRAM_TOKEN = os.environ.get("7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE")
-FOOTBALL_DATA_TOKEN = os.environ.get("ec0171bdf2db4f6baf095fb95ce0deb0")
-BSD_API_TOKEN = os.environ.get("658732b3608784390666f3db24627a802add0692")
+TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"
+FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6baf095fb95ce0deb0"
+BSD_API_TOKEN = "658732b3608784390666f3db24627a802add0692"
 
 # Проверяем, что все токены заданы
 if not TELEGRAM_TOKEN:
