@@ -9,7 +9,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # ================== НАСТРОЙКИ (токены прямо в коде) ==================
-TELEGRAM_TOKEN = "7728656883:AAEme21mHObvqMOoifogEYRiy3LTyk2W5bE"
+TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"
 FOOTBALL_DATA_TOKEN = "ec0171bd4f2db4f6ba9f95fb95ce0deb0"
 BSD_API_TOKEN = "658732b3608784390666f3db24627a802add0692"
 
