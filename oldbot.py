@@ -13,6 +13,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"
 FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6baf095fb95ce0deb0"
 
+# ID лиг в football-data.org
 LEAGUES = {
     "apl": {"id": "PL", "name": "АПЛ", "logo": "🏴󠁧󠁢󠁥󠁮󠁧󠁿"},
     "laliga": {"id": "PD", "name": "Ла Лига", "logo": "🇪🇸"},
@@ -28,6 +29,7 @@ cache = {
     'live': TTLCache(maxsize=20, ttl=30),
 }
 
+# Часовые пояса
 UTC_TZ = pytz.UTC
 MSK_TZ = pytz.timezone('Europe/Moscow')
 
@@ -35,8 +37,19 @@ MSK_TZ = pytz.timezone('Europe/Moscow')
 
 conn = sqlite3.connect("football_bot.db", check_same_thread=False)
 cursor = conn.cursor()
+
+# Таблица подписок на команды
 cursor.execute("CREATE TABLE IF NOT EXISTS subscriptions (user_id INTEGER, team TEXT)")
+# Таблица подписок на live-матчи (голы)
 cursor.execute("CREATE TABLE IF NOT EXISTS goal_subscriptions (user_id INTEGER, match_id INTEGER, PRIMARY KEY (user_id, match_id))")
+# Таблица статистики пользователей
+cursor.execute("CREATE TABLE IF NOT EXISTS users ("
+               "user_id INTEGER PRIMARY KEY, "
+               "first_name TEXT, "
+               "username TEXT, "
+               "first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+               "last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+               "commands_count INTEGER DEFAULT 0)")
 conn.commit()
 
 # ================== ФУНКЦИИ ДЛЯ РАБОТЫ С API ==================
@@ -112,6 +125,18 @@ async def fetch_live_matches():
     except Exception as e:
         print(f"❌ Ошибка запроса live: {e}")
         return []
+
+# ================== СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ ==================
+
+async def update_user_stats(user_id, first_name=None, username=None):
+    """Обновляет или создаёт запись о пользователе."""
+    cursor.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,))
+    if cursor.fetchone():
+        cursor.execute("UPDATE users SET last_seen = CURRENT_TIMESTAMP, commands_count = commands_count + 1 WHERE user_id = ?", (user_id,))
+    else:
+        cursor.execute("INSERT INTO users (user_id, first_name, username, commands_count) VALUES (?, ?, ?, 1)",
+                       (user_id, first_name, username))
+    conn.commit()
 
 # ================== ВРЕМЯ ==================
 
@@ -195,6 +220,8 @@ def league_menu(league_key):
 # ================== START ==================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    await update_user_stats(user.id, user.first_name, user.username)
     await update.message.reply_text(
         "⚽ <b>Футбольный бот PRO</b>\n\n<i>Выберите лигу:</i>",
         parse_mode=ParseMode.HTML,
@@ -204,6 +231,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================== МАТЧИ ЗА 48 ЧАСОВ ==================
 
 async def matches_next_48h(update, league_key):
+    user = update.from_user
+    await update_user_stats(user.id, user.first_name, user.username)
+
     league = LEAGUES[league_key]
     date_from = datetime.now().strftime("%Y-%m-%d")
     date_to = (datetime.now() + timedelta(hours=48)).strftime("%Y-%m-%d")
@@ -258,6 +288,9 @@ async def matches_next_48h(update, league_key):
 # ================== ТАБЛИЦА ==================
 
 async def show_table(update, league_key):
+    user = update.from_user
+    await update_user_stats(user.id, user.first_name, user.username)
+
     league = LEAGUES[league_key]
 
     cache_key = f"standings_{league['id']}"
@@ -296,6 +329,9 @@ async def show_table(update, league_key):
 # ================== LIVE МАТЧИ (ОБЩИЙ СПИСОК) ==================
 
 async def live_matches(update):
+    user = update.from_user
+    await update_user_stats(user.id, user.first_name, user.username)
+
     cache_key = "live_matches"
     cached = cache['live'].get(cache_key)
     if cached is not None:
@@ -342,6 +378,9 @@ async def live_matches(update):
 # ================== LIVE ГОЛЫ (ПОДПИСКА) ==================
 
 async def goal_live_menu(update):
+    user = update.from_user
+    await update_user_stats(user.id, user.first_name, user.username)
+
     matches = await fetch_live_matches()
     if not matches:
         await update.message.reply_text(
@@ -372,9 +411,11 @@ async def goal_live_menu(update):
     )
 
 async def goal_subscribe(update, match_id):
-    user_id = update.from_user.id
+    user = update.from_user
+    await update_user_stats(user.id, user.first_name, user.username)
+
     try:
-        cursor.execute("INSERT OR IGNORE INTO goal_subscriptions (user_id, match_id) VALUES (?, ?)", (user_id, match_id))
+        cursor.execute("INSERT OR IGNORE INTO goal_subscriptions (user_id, match_id) VALUES (?, ?)", (user.id, match_id))
         conn.commit()
         await update.message.reply_text(
             f"✅ Вы подписались на уведомления о голах в этом матче!",
@@ -384,45 +425,22 @@ async def goal_subscribe(update, match_id):
         await update.message.reply_text(f"❌ Ошибка подписки: {e}")
 
 async def goal_unsubscribe(update, match_id):
-    user_id = update.from_user.id
-    cursor.execute("DELETE FROM goal_subscriptions WHERE user_id=? AND match_id=?", (user_id, match_id))
+    user = update.from_user
+    await update_user_stats(user.id, user.first_name, user.username)
+
+    cursor.execute("DELETE FROM goal_subscriptions WHERE user_id=? AND match_id=?", (user.id, match_id))
     conn.commit()
     await update.message.reply_text(
         f"❌ Вы отписались от уведомлений о голах в этом матче.",
         reply_markup=main_menu()
     )
 
-# ================== ПРОСМОТР ПОДПИСОК НА ГОЛЫ ==================
-
-async def my_goal_subscriptions(update, user_id):
-    cursor.execute("SELECT match_id FROM goal_subscriptions WHERE user_id=?", (user_id,))
-    rows = cursor.fetchall()
-    if not rows:
-        await update.message.reply_text(
-            "⚽ <b>Ваши подписки на голы</b>\n\n<i>У вас нет подписок.</i>",
-            parse_mode=ParseMode.HTML,
-            reply_markup=main_menu()
-        )
-        return
-
-    # Для отображения названий команд нужно получить информацию о матчах (можно из кэша или запросить)
-    # Упростим: покажем только ID матчей, или сделаем доп. запрос. Но для демо используем ID.
-    text = "⚽ <b>Ваши подписки на голы:</b>\n\n"
-    keyboard = []
-    for (match_id,) in rows:
-        text += f"• Матч ID: {match_id}\n"
-        keyboard.append([InlineKeyboardButton(f"❌ Отписаться от матча {match_id}", callback_data=f"goal_unsub_{match_id}")])
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")])
-
-    await update.message.reply_text(
-        text,
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
 # ================== ЛИГА ЧЕМПИОНОВ – ПЛЕЙ-ОФФ ==================
 
 async def ucl_playoff(update):
+    user = update.from_user
+    await update_user_stats(user.id, user.first_name, user.username)
+
     text = "🏆 <b>ЛИГА ЧЕМПИОНОВ 2025/26 – ПЛЕЙ-ОФФ</b>\n\n"
 
     r16 = UCL_PLAYOFF["round_of_16"]
@@ -464,6 +482,8 @@ async def unsubscribe_team(user_id, team):
     conn.commit()
 
 async def my_subscriptions(update, user_id):
+    await update_user_stats(update.from_user.id, update.from_user.first_name, update.from_user.username)
+
     cursor.execute("SELECT team FROM subscriptions WHERE user_id=?", (user_id,))
     subs = [row[0] for row in cursor.fetchall()]
 
@@ -505,6 +525,56 @@ async def my_subscriptions(update, user_id):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+# ================== СТАТИСТИКА (ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА) ==================
+
+OWNER_ID = 123456789  # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID (узнайте у @userinfobot)
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        await update.message.reply_text("⛔ Доступ запрещён")
+        return
+
+    await update_user_stats(user.id, user.first_name, user.username)  # считаем и для владельца
+
+    # Общее количество пользователей
+    cursor.execute("SELECT COUNT(*) FROM users")
+    total_users = cursor.fetchone()[0]
+
+    # Активные сегодня
+    cursor.execute("SELECT COUNT(*) FROM users WHERE date(last_seen) = date('now')")
+    today_active = cursor.fetchone()[0]
+
+    # Активные за последние 7 дней
+    cursor.execute("SELECT COUNT(*) FROM users WHERE last_seen >= datetime('now', '-7 days')")
+    week_active = cursor.fetchone()[0]
+
+    # Активные за последние 30 дней
+    cursor.execute("SELECT COUNT(*) FROM users WHERE last_seen >= datetime('now', '-30 days')")
+    month_active = cursor.fetchone()[0]
+
+    # Топ-10 команд по подпискам
+    cursor.execute("SELECT team, COUNT(*) as cnt FROM subscriptions GROUP BY team ORDER BY cnt DESC LIMIT 10")
+    top_teams = cursor.fetchall()
+    teams_text = "\n".join([f"{team}: {cnt}" for team, cnt in top_teams]) or "Нет данных"
+
+    # Топ-10 самых активных пользователей
+    cursor.execute("SELECT user_id, first_name, username, commands_count FROM users ORDER BY commands_count DESC LIMIT 10")
+    top_users = cursor.fetchall()
+    users_text = "\n".join([f"{first or uid}: {cmds} команд" for uid, first, uname, cmds in top_users]) or "Нет данных"
+
+    text = (
+        f"📊 <b>Статистика бота</b>\n\n"
+        f"👥 Всего пользователей: {total_users}\n"
+        f"📅 Активных сегодня: {today_active}\n"
+        f"📆 Активных за неделю: {week_active}\n"
+        f"🗓 Активных за месяц: {month_active}\n\n"
+        f"⚽ <b>Топ команд по подпискам:</b>\n{teams_text}\n\n"
+        f"🏆 <b>Топ активных пользователей:</b>\n{users_text}"
+    )
+
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
 # ================== ОБРАБОТЧИК КНОПОК ==================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -512,6 +582,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     user_id = query.from_user.id
+
+    # Статистика для всех действий
+    await update_user_stats(query.from_user.id, query.from_user.first_name, query.from_user.username)
 
     if data == "back_to_main":
         await query.message.reply_text(
@@ -654,15 +727,16 @@ async def match_checker(app):
 
 def main():
     print("=" * 60)
-    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (с live‑матчами и уведомлениями о голах)")
+    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (со статистикой)")
     print("=" * 60)
-    print(f"✅ База данных: football_bot.db")
+    print("✅ База данных: football_bot.db")
     print("✅ Асинхронный, с кэшированием, время МСК")
-    print("✅ Добавлены live‑матчи и подписка на голы")
+    print("✅ Добавлены live‑матчи, подписка на голы и статистика")
     print("=" * 60)
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CallbackQueryHandler(button_handler))
 
     # Запускаем фоновую задачу в том же цикле
