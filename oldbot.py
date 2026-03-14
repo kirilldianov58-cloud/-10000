@@ -8,9 +8,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# ================== НАСТРОЙКИ (токены прямо в коде) ==================
-TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"
-FOOTBALL_DATA_TOKEN = "ec0171bd4f2db4f6ba9f95fb95ce0deb0"
+# ================== НАСТРОЙКИ ==================
+TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"  # правильный токен
+FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6baf095fb95ce0deb0"
 BSD_API_TOKEN = "658732b3608784390666f3db24627a802add0692"
 
 # ID лиг в football-data.org
@@ -38,11 +38,9 @@ TEAM_TRANSLATIONS = {
     "Stade Brestois": "Брест",
     "Vitória": "Витория",
     "Atlético Mineiro": "Атлетико Минейро",
-    # Добавляйте другие команды по мере необходимости
 }
 
 def translate_team(name):
-    """Возвращает русское название команды, если есть в словаре, иначе оригинал."""
     return TEAM_TRANSLATIONS.get(name, name)
 
 # Кэш для таблиц и расписания
@@ -128,17 +126,33 @@ async def fetch_live_matches_bsd():
             resp = await client.get(url, headers=headers)
             if resp.status_code == 200:
                 data = resp.json()
+                # Отладочный вывод первого матча
+                if data.get("results") and len(data["results"]) > 0:
+                    print("🔍 Сырой ответ первого матча:")
+                    print(data["results"][0])
+                
                 matches = []
                 for match in data.get("results", []):
-                    # Получаем счёт
+                    # Пытаемся получить счёт из разных мест
                     score_home = 0
                     score_away = 0
+                    
+                    # Вариант 1: поле "score"
                     if "score" in match and isinstance(match["score"], dict):
                         score_home = match["score"].get("home", 0)
                         score_away = match["score"].get("away", 0)
+                    # Вариант 2: поле "scores"
                     elif "scores" in match and isinstance(match["scores"], dict):
                         score_home = match["scores"].get("home", 0)
                         score_away = match["scores"].get("away", 0)
+                    # Вариант 3: из инцидентов (голы) – считаем количество голов по событиям
+                    else:
+                        incidents = match.get("incidents", [])
+                        home_goals = sum(1 for inc in incidents if inc.get("type") == "goal" and inc.get("home"))
+                        away_goals = sum(1 for inc in incidents if inc.get("type") == "goal" and inc.get("away"))
+                        if home_goals > 0 or away_goals > 0:
+                            score_home = home_goals
+                            score_away = away_goals
 
                     # Название лиги
                     league_data = match.get("league", {})
@@ -396,10 +410,17 @@ async def live_matches(update):
         score_h = match["score_home"]
         score_a = match["score_away"]
         minute = match["minute"]
+        status = match["status"]
+
+        # Добавим отметку о завершении
+        if status == "FINISHED":
+            status_text = "✅ Завершён"
+        else:
+            status_text = f"⏱ {minute}'" if minute else ""
 
         text += f"⚽ <b>{home}</b> {score_h}–{score_a} <b>{away}</b>"
-        if minute:
-            text += f"  ({minute}')"
+        if status_text:
+            text += f"  {status_text}"
         text += f"\n   <i>{league_name}</i>\n\n"
 
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
@@ -646,7 +667,6 @@ def format_incident_message(incident, home_team, away_team):
     player = incident.get("player", "Неизвестно")
     minute = incident.get("minute", "")
     team = incident.get("team", "")
-    # Переводим название команды
     team_ru = translate_team(team)
 
     if inc_type == "goal":
@@ -665,7 +685,7 @@ def format_incident_message(incident, home_team, away_team):
     else:
         return None
 
-# ================== ФОНОВАЯ ЗАДАЧА ПРОВЕРКИ МАТЧЕЙ (BSD) ==================
+# ================== ФОНОВАЯ ЗАДАЧА ПРОВЕРКИ МАТЧЕЙ ==================
 last_incidents = {}
 notified_start = set()
 
@@ -681,7 +701,6 @@ async def match_checker(app):
                 incidents = match["incidents"]
 
                 for inc in incidents:
-                    # Уникальный ключ события
                     inc_key = f"{fixture_id}_{inc['minute']}_{inc['type']}_{inc.get('player', '')}"
                     if inc_key not in last_incidents:
                         cursor.execute("SELECT user_id FROM goal_subscriptions WHERE match_id=?", (fixture_id,))
@@ -700,7 +719,6 @@ async def match_checker(app):
                                         print(f"Ошибка отправки уведомления: {e}")
                         last_incidents[inc_key] = True
 
-                # Уведомление о старте матча
                 if match["status"] == "LIVE" and fixture_id not in notified_start:
                     cursor.execute("SELECT user_id FROM goal_subscriptions WHERE match_id=?", (fixture_id,))
                     users = cursor.fetchall()
@@ -718,10 +736,10 @@ async def match_checker(app):
         except Exception as e:
             print(f"Ошибка в match_checker: {e}")
 
-        await asyncio.sleep(30)  # проверка каждые 30 секунд
+        await asyncio.sleep(30)
 
 # ================== СТАТИСТИКА (ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА) ==================
-OWNER_ID = 6298119477 # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID (узнайте у @userinfobot)
+OWNER_ID = 123456789  # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
