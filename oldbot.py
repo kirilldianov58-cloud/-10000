@@ -167,32 +167,49 @@ async def update_user_stats(user_id, first_name=None, username=None):
 # ================== ДАННЫЕ ЛИГИ ЧЕМПИОНОВ 2025/26 ==================
 UCL_PLAYOFF = {
     "round_of_16": {
-        "name": "1/8 финала (первые матчи)",
-        "dates": "10–11 марта 2026",
+        "name": "1/8 финала",
+        "first_leg_dates": "10–11 марта 2026",
+        "second_leg_dates": "17–18 марта 2026",
         "matches": [
-            {"home": "Реал Мадрид", "away": "Манчестер Сити", "agg": "3:0", "first": "3:0"},
-            {"home": "ПСЖ", "away": "Челси", "agg": "5:2", "first": "5:2"},
-            {"home": "Бавария", "away": "Аталанта", "agg": "6:1", "first": "6:1"},
-            {"home": "Атлетико Мадрид", "away": "Тоттенхэм", "agg": "5:2", "first": "5:2"},
-            {"home": "Буде-Глимт", "away": "Спортинг", "agg": "3:0", "first": "3:0"},
-            {"home": "Галатасарай", "away": "Ливерпуль", "agg": "1:0", "first": "1:0"},
-            {"home": "Ньюкасл", "away": "Барселона", "agg": "1:1", "first": "1:1"},
-            {"home": "Байер", "away": "Арсенал", "agg": "1:1", "first": "1:1"}
+            {"home_first": "Галатасарай", "away_first": "Ливерпуль", 
+             "home_second": "Ливерпуль", "away_second": "Галатасарай", 
+             "first_score": "1:0", "second_score": "—"},
+            {"home_first": "Аталанта", "away_first": "Бавария", 
+             "home_second": "Бавария", "away_second": "Аталанта", 
+             "first_score": "6:1", "second_score": "—"},
+            {"home_first": "Атлетико", "away_first": "Тоттенхэм", 
+             "home_second": "Тоттенхэм", "away_second": "Атлетико", 
+             "first_score": "5:2", "second_score": "—"},
+            {"home_first": "Ньюкасл", "away_first": "Барселона", 
+             "home_second": "Барселона", "away_second": "Ньюкасл", 
+             "first_score": "1:1", "second_score": "—"},
+            {"home_first": "Байер", "away_first": "Арсенал", 
+             "home_second": "Арсенал", "away_second": "Байер", 
+             "first_score": "1:1", "second_score": "—"},
+            {"home_first": "Буде-Глимт", "away_first": "Спортинг", 
+             "home_second": "Спортинг", "away_second": "Буде-Глимт", 
+             "first_score": "3:0", "second_score": "—"},
+            {"home_first": "ПСЖ", "away_first": "Челси", 
+             "home_second": "Челси", "away_second": "ПСЖ", 
+             "first_score": "5:2", "second_score": "—"},
+            {"home_first": "Реал Мадрид", "away_first": "Манчестер Сити", 
+             "home_second": "Манчестер Сити", "away_second": "Реал Мадрид", 
+             "first_score": "3:0", "second_score": "—"}
         ]
     },
     "quarterfinals": {
         "name": "1/4 финала",
-        "dates": "1–2 и 8–9 апреля 2026",
-        "matches": [{"info": "Жеребьёвка после 1/8 финала"}]
+        "dates": "7–8 и 14–15 апреля 2026",
+        "matches": [{"info": "Жеребьёвка 1/4 финала пройдёт после завершения 1/8 финала"}]
     },
     "semifinals": {
         "name": "1/2 финала",
-        "dates": "22–23 и 29–30 апреля 2026",
-        "matches": [{"info": "Пары определятся позже"}]
+        "dates": "28–29 апреля и 5–6 мая 2026",
+        "matches": [{"info": "Пары полуфиналистов определятся по итогам 1/4 финала"}]
     },
     "final": {
         "name": "ФИНАЛ",
-        "date": "30 мая 2026, Будапешт",
+        "date": "30 мая 2026, Будапешт (Пушкаш Арена)",
         "match": {"info": "Финалисты станут известны позднее"}
     }
 }
@@ -440,28 +457,35 @@ async def ucl_playoff(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
 
-    text = "🏆 <b>ЛИГА ЧЕМПИОНОВ 2025/26 – ПЛЕЙ-ОФФ</b>\n\n"
-
+    text = "🏆 <b>ЛИГА ЧЕМПИОНОВ 2025/26 – 1/8 ФИНАЛА</b>\n\n"
+    
     r16 = UCL_PLAYOFF["round_of_16"]
-    text += f"<b>{r16['name']}</b>  ({r16['dates']})\n"
-    for m in r16["matches"]:
-        text += f"   {m['home']} – {m['away']}  {m['agg']} ({m['first']})\n"
-    text += "\n"
-
+    text += f"<b>Первые матчи:</b> {r16['first_leg_dates']}\n"
+    text += f"<b>Ответные матчи:</b> {r16['second_leg_dates']}\n\n"
+    
+    for match in r16["matches"]:
+        text += f"⚔️ <b>{match['home_first']} – {match['away_first']}</b>"
+        if match['first_score'] != "—":
+            text += f"  {match['first_score']}"
+        text += f"\n   🏠 ответный: {match['home_second']} – {match['away_second']}"
+        if match['second_score'] != "—":
+            text += f"  {match['second_score']}"
+        text += "\n\n"
+    
     qf = UCL_PLAYOFF["quarterfinals"]
-    text += f"<b>{qf['name']}</b>  ({qf['dates']})\n"
+    text += f"<b>{qf['name']}</b> ({qf['dates']})\n"
     for m in qf["matches"]:
         text += f"   {m['info']}\n"
     text += "\n"
-
+    
     sf = UCL_PLAYOFF["semifinals"]
-    text += f"<b>{sf['name']}</b>  ({sf['dates']})\n"
+    text += f"<b>{sf['name']}</b> ({sf['dates']})\n"
     for m in sf["matches"]:
         text += f"   {m['info']}\n"
     text += "\n"
-
+    
     final = UCL_PLAYOFF["final"]
-    text += f"<b>{final['name']}</b>  ({final['date']})\n"
+    text += f"<b>{final['name']}</b> ({final['date']})\n"
     text += f"   {final['match']['info']}\n"
 
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
