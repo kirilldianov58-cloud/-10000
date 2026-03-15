@@ -262,9 +262,8 @@ def league_menu(league_key):
         buttons.insert(0, [InlineKeyboardButton("🏆 Плей-офф 2025/26", callback_data="ucl_playoff")])
     return InlineKeyboardMarkup(buttons)
 
-# ================== START ==================
-
-    async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ================== START ==================    
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await update_user_stats(user.id, user.first_name, user.username)
     photo_url = "https://i.postimg.cc/KjG5HyBq/f131b037207811f1b6c7eeba09ae9e87.jpg"
