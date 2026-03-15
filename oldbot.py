@@ -432,11 +432,7 @@ async def show_table(update, league_key):
         draw = row["draw"]
         lost = row["lost"]
 
-        if pos in DIGIT_EMOJIS:
-            pos_emoji = f'<tg-emoji emoji-id="{DIGIT_EMOJIS[pos]}">{pos}</tg-emoji>'
-            text += f"{pos_emoji} <b>{team}</b>\n"
-        else:
-            text += f"<b>{pos}.</b> {team}\n"
+       text += f"<b>{pos}.</b> {team}\n"
         text += f"   {pts} очков | И:{played} В:{won} Н:{draw} П:{lost}\n\n"
         
     print(f"Текст таблицы (начало): {text[:500]}")
