@@ -1,5 +1,6 @@
 import asyncio
 import sqlite3
+import os
 from datetime import datetime, timedelta
 import httpx
 from cachetools import TTLCache
@@ -24,11 +25,11 @@ LEAGUES = {
     "ucl": {"id": "CL", "name": "Лига Чемпионов", "logo": "🏆"}
 }
 
-# Словарь перевода названий команд на русский (можно дополнять)
+# Словарь перевода названий команд на русский
 TEAM_TRANSLATIONS = {
     "Real Madrid": "Реал Мадрид",
     "Elche": "Эльче",
-    "West Ham United": "Вест Хэм Юнайтед",
+    "West Ham United": "Вест Хэм",
     "Manchester City": "Манчестер Сити",
     "KVC Westerlo": "Вестерло",
     "Club Brugge KV": "Брюгге",
@@ -50,7 +51,7 @@ TEAM_TRANSLATIONS = {
     "Barcelona": "Барселона",
     "Bayer Leverkusen": "Байер",
     "Arsenal": "Арсенал",
-    "Bodø/Glimt": "Буде-Глимт",
+    "Bodø/Glimt": "Будё-Глимт",
     "Sporting CP": "Спортинг",
 }
 
@@ -229,101 +230,41 @@ UCL_PLAYOFF = {
     }
 }
 
-# ================== МЕНЮ С КАСТОМНЫМИ ЭМОДЗИ ==================
+# ================== МЕНЮ (ЯРКИЕ СТАНДАРТНЫЕ ЭМОДЗИ) ==================
 def main_menu():
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(
-                text="АПЛ",
-                callback_data="league_apl",
-                icon_custom_emoji_id="5440855216134043525"
-            ),
-            InlineKeyboardButton(
-                text="Ла Лига",
-                callback_data="league_laliga",
-                icon_custom_emoji_id="5438475709762777893"
-            )
+            InlineKeyboardButton("🏴󠁧󠁢󠁥󠁮󠁧󠁿 АПЛ", callback_data="league_apl"),
+            InlineKeyboardButton("🇪🇸 Ла Лига", callback_data="league_laliga")
         ],
         [
-            InlineKeyboardButton(
-                text="Бундеслига",
-                callback_data="league_bundesliga",
-                icon_custom_emoji_id="5433698383279706493"
-            ),
-            InlineKeyboardButton(
-                text="Серия А",
-                callback_data="league_seriea",
-                icon_custom_emoji_id="5251500918486081233"
-            )
+            InlineKeyboardButton("🇩🇪 Бундеслига", callback_data="league_bundesliga"),
+            InlineKeyboardButton("🇮🇹 Серия А", callback_data="league_seriea")
         ],
         [
-            InlineKeyboardButton(
-                text="Лига Чемпионов",
-                callback_data="league_ucl",
-                icon_custom_emoji_id="5434052314354699255"
-            )
+            InlineKeyboardButton("🏆 Лига Чемпионов", callback_data="league_ucl")
         ],
         [
-            InlineKeyboardButton(
-                text="LIVE матчи",
-                callback_data="live",
-                icon_custom_emoji_id="5215667808767059302"
-            )
+            InlineKeyboardButton("🔴 LIVE матчи", callback_data="live")
         ],
         [
-            InlineKeyboardButton(
-                text="Голы и карточки LIVE",
-                callback_data="goal_live",
-                icon_custom_emoji_id="5215667808767059302"
-            )
+            InlineKeyboardButton("⚽ Голы и карточки LIVE", callback_data="goal_live")
         ],
         [
-            InlineKeyboardButton(
-                text="Мои подписки",
-                callback_data="my_subs",
-                icon_custom_emoji_id="5409379647089567417"  # звезда (можно заменить на свой)
-            )
+            InlineKeyboardButton("⭐ Мои подписки", callback_data="my_subs")
         ]
     ])
 
 def league_menu(league_key):
     league = LEAGUES[league_key]
     buttons = [
-        [
-            InlineKeyboardButton(
-                text="📅 Ближайшие матчи в течение 48ч",
-                callback_data=f"matches_{league_key}",
-                icon_custom_emoji_id="5274055917766202507"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="📊 Таблица",
-                callback_data=f"table_{league_key}"
-                # без эмодзи или можно добавить стандартный
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="⭐ Подписаться на команду",
-                callback_data=f"teams_{league_key}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="🔙 Назад",
-                callback_data="back_to_main",
-                icon_custom_emoji_id="5258236805890710909"
-            )
-        ]
+        [InlineKeyboardButton("📅 Ближайшие матчи в течение 48ч", callback_data=f"matches_{league_key}")],
+        [InlineKeyboardButton("📊 Таблица", callback_data=f"table_{league_key}")],
+        [InlineKeyboardButton("➕ Подписаться на команду", callback_data=f"teams_{league_key}")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]
     ]
     if league_key == "ucl":
-        buttons.insert(0, [
-            InlineKeyboardButton(
-                text="🏆 Плей-офф 2025/26",
-                callback_data="ucl_playoff"
-            )
-        ])
+        buttons.insert(0, [InlineKeyboardButton("🏆 Плей-офф 2025/26", callback_data="ucl_playoff")])
     return InlineKeyboardMarkup(buttons)
 
 # ================== START ==================
@@ -331,7 +272,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await update_user_stats(user.id, user.first_name, user.username)
     await update.message.reply_text(
-        f"<tg-emoji emoji-id='5377799315202783755'>⚽</tg-emoji> <b>Футбольный бот PRO</b>\n\n<i>Выберите лигу:</i>",
+        f"⚽ <b>Футбольный бот PRO</b>\n\n<i>Выберите лигу:</i>",
         parse_mode=ParseMode.HTML,
         reply_markup=main_menu()
     )
@@ -501,13 +442,7 @@ async def goal_live_menu(update):
             f"🔔 {home_ru} – {away_ru}",
             callback_data=f"goal_sub_{match_id}"
         )])
-    keyboard.append([
-        InlineKeyboardButton(
-            text="🔙 Назад",
-            callback_data="back_to_main",
-            icon_custom_emoji_id="5258236805890710909"
-        )
-    ])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")])
 
     await update.message.reply_text(
         text,
@@ -545,33 +480,26 @@ async def ucl_playoff(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
 
-    text = "🏆 <b>ЛИГА ЧЕМПИОНОВ 2025/26 – 1/8 ФИНАЛА</b>\n\n"
-    
+    text = "🏆 <b>ЛИГА ЧЕМПИОНОВ 2025/26 – ПЛЕЙ-ОФФ</b>\n\n"
+
     r16 = UCL_PLAYOFF["round_of_16"]
-    text += f"<b>Первые матчи:</b> {r16['first_leg_dates']}\n"
-    text += f"<b>Ответные матчи:</b> {r16['second_leg_dates']}\n\n"
-    
-    for match in r16["matches"]:
-        text += f"⚔️ <b>{match['home_first']} – {match['away_first']}</b>"
-        if match['first_score'] != "—":
-            text += f"  {match['first_score']}"
-        text += f"\n   🏠 ответный: {match['home_second']} – {match['away_second']}"
-        if match['second_score'] != "—":
-            text += f"  {match['second_score']}"
-        text += "\n\n"
-    
+    text += f"<b>{r16['name']}</b> ({r16['first_leg_dates']} – {r16['second_leg_dates']})\n"
+    for m in r16["matches"]:
+        text += f"   {m['home_first']} – {m['away_first']} {m['first_score']}\n"
+        text += f"   ответный: {m['home_second']} – {m['away_second']} {m['second_score']}\n\n"
+
     qf = UCL_PLAYOFF["quarterfinals"]
     text += f"<b>{qf['name']}</b> ({qf['dates']})\n"
     for m in qf["matches"]:
         text += f"   {m['info']}\n"
     text += "\n"
-    
+
     sf = UCL_PLAYOFF["semifinals"]
     text += f"<b>{sf['name']}</b> ({sf['dates']})\n"
     for m in sf["matches"]:
         text += f"   {m['info']}\n"
     text += "\n"
-    
+
     final = UCL_PLAYOFF["final"]
     text += f"<b>{final['name']}</b> ({final['date']})\n"
     text += f"   {final['match']['info']}\n"
@@ -590,7 +518,7 @@ async def fetch_league_teams(competition_id):
                 return [team["name"] for team in data.get("teams", [])]
             else:
                 return []
-    except:
+    except Exception:
         return []
 
 async def show_league_teams(update, league_key):
@@ -599,7 +527,7 @@ async def show_league_teams(update, league_key):
 
     league = LEAGUES[league_key]
     await update.message.reply_text(f"⏳ Загружаю команды {league['name']}...")
-    
+
     teams = await fetch_league_teams(league["id"])
     if not teams:
         await update.message.reply_text(f"❌ Не удалось загрузить команды", reply_markup=main_menu())
@@ -613,13 +541,7 @@ async def show_league_teams(update, league_key):
         if i+1 < len(teams):
             row.append(InlineKeyboardButton(teams[i+1], callback_data=f"sub_team_{teams[i+1]}"))
         keyboard.append(row)
-    keyboard.append([
-        InlineKeyboardButton(
-            text="🔙 Назад",
-            callback_data=f"league_{league_key}",
-            icon_custom_emoji_id="5258236805890710909"
-        )
-    ])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"league_{league_key}")])
 
     await update.message.reply_text(
         text,
@@ -675,13 +597,7 @@ async def my_subscriptions(update, user_id):
     if goal_subs:
         for mid in goal_subs:
             keyboard.append([InlineKeyboardButton(f"❌ Отписаться от матча {mid}", callback_data=f"goal_unsub_{mid}")])
-    keyboard.append([
-        InlineKeyboardButton(
-            text="🔙 Назад",
-            callback_data="back_to_main",
-            icon_custom_emoji_id="5258236805890710909"
-        )
-    ])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")])
 
     await update.message.reply_text(
         text,
@@ -885,7 +801,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================== ЗАПУСК ==================
 def main():
     print("=" * 60)
-    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (с кастомными эмодзи)")
+    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (яркие эмодзи + кнопка Назад)")
     print("=" * 60)
     print("✅ Таблицы и расписание: football-data.org")
     print("✅ Live-матчи и события: football-data.org")
@@ -897,6 +813,7 @@ def main():
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CallbackQueryHandler(button_handler))
 
+    # Создаём новый цикл для Python 3.14+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.create_task(match_checker(app))
