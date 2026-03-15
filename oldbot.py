@@ -897,7 +897,8 @@ def main():
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     loop.create_task(match_checker(app))
 
     print("🚀 Бот запущен! Откройте Telegram и отправьте /start")
