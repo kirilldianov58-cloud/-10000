@@ -432,7 +432,7 @@ async def show_table(update, league_key):
         draw = row["draw"]
         lost = row["lost"]
 
-        # Используем премиум-эмодзи для позиций 1-9
+        # Премиум-эмодзи для позиций 1–9 (если есть)
         if pos in DIGIT_EMOJIS:
             pos_emoji = f'<tg-emoji emoji-id="{DIGIT_EMOJIS[pos]}">{pos}</tg-emoji>'
             text += f"{pos_emoji} <b>{team}</b>\n"
@@ -440,14 +440,38 @@ async def show_table(update, league_key):
             text += f"<b>{pos}.</b> {team}\n"
         text += f"   {pts} очков | И:{played} В:{won} Н:{draw} П:{lost}\n\n"
 
-    # Отладочный вывод (можно убрать, когда убедишься, что всё работает)
+    # Отладочный вывод
+    print(f"Длина текста таблицы: {len(text)} символов")
     print(f"Текст таблицы (начало): {text[:500]}")
 
-    if loading_msg:
-        await loading_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
-    else:
-        await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
-
+    try:
+        if loading_msg:
+            await loading_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
+        else:
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
+    except Exception as e:
+        print(f"❌ Ошибка при отправке таблицы: {e}")
+        # Если ошибка из-за длины, отправляем сокращённую версию
+        if "Message is too long" in str(e) or "MESSAGE_TOO_LONG" in str(e):
+            short_text = text[:3500] + "\n\n... (таблица обрезана из-за лимита)"
+            try:
+                if loading_msg:
+                    await loading_msg.edit_text(short_text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
+                else:
+                    await update.message.reply_text(short_text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
+                print("✅ Отправлена сокращённая версия таблицы")
+            except Exception as e2:
+                print(f"❌ Не удалось отправить даже сокращённую таблицу: {e2}")
+        else:
+            # Если другая ошибка, пробуем отправить без HTML
+            try:
+                if loading_msg:
+                    await loading_msg.edit_text(text, reply_markup=back_keyboard)
+                else:
+                    await update.message.reply_text(text, reply_markup=back_keyboard)
+                print("✅ Отправлена таблица без HTML-разметки")
+            except Exception as e3:
+                print(f"❌ Полный провал: {e3}")
 # ================== LIVE МАТЧИ (с премиум-мячом) ==================
 async def live_matches(update):
     user = update.from_user
