@@ -24,7 +24,7 @@ LEAGUES = {
     "ucl": {"id": "CL", "name": "Лига Чемпионов", "logo": "🏆"}
 }
 
-# Словарь перевода названий команд на русский
+# Словарь перевода названий команд на русский (можно дополнять)
 TEAM_TRANSLATIONS = {
     "Real Madrid": "Реал Мадрид",
     "Elche": "Эльче",
@@ -270,7 +270,7 @@ def league_menu(league_key):
             [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]
         ])
 
-# ================== START (С КАСТОМНЫМ ЭМОДЗИ В ТЕКСТЕ) ==================
+# ================== START ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -376,7 +376,7 @@ async def show_table(update, league_key):
     else:
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-# ================== LIVE МАТЧИ (ОБЩИЙ СПИСОК) ==================
+# ================== LIVE МАТЧИ ==================
 async def live_matches(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -417,7 +417,7 @@ async def live_matches(update):
 
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-# ================== LIVE СТАТИСТИКА (ПОДПИСКА НА СОБЫТИЯ) ==================
+# ================== LIVE СТАТИСТИКА ==================
 async def goal_live_menu(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -478,7 +478,7 @@ async def goal_unsubscribe(update, match_id):
         reply_markup=main_menu()
     )
 
-# ================== ЛИГА ЧЕМПИОНОВ – ПЛЕЙ-ОФФ ==================
+# ================== ЛИГА ЧЕМПИОНОВ ==================
 async def ucl_playoff(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -517,6 +517,48 @@ async def ucl_playoff(update):
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ================== ПОДПИСКИ (на команды) ==================
+async def fetch_league_teams(competition_id):
+    url = f"https://api.football-data.org/v4/competitions/{competition_id}/teams"
+    headers = {"X-Auth-Token": FOOTBALL_DATA_TOKEN}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                return [team["name"] for team in data.get("teams", [])]
+            else:
+                return []
+    except:
+        return []
+
+async def show_league_teams(update, league_key):
+    user = update.from_user
+    await update_user_stats(user.id, user.first_name, user.username)
+
+    league = LEAGUES[league_key]
+    await update.message.reply_text(f"⏳ Загружаю команды {league['name']}...")
+    
+    teams = await fetch_league_teams(league["id"])
+    if not teams:
+        await update.message.reply_text(f"❌ Не удалось загрузить команды", reply_markup=main_menu())
+        return
+
+    text = f"{league['logo']} <b>Команды {league['name']}</b>\n\n"
+    keyboard = []
+    for i in range(0, len(teams), 2):
+        row = []
+        row.append(InlineKeyboardButton(teams[i], callback_data=f"sub_team_{teams[i]}"))
+        if i+1 < len(teams):
+            row.append(InlineKeyboardButton(teams[i+1], callback_data=f"sub_team_{teams[i+1]}"))
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"league_{league_key}")])
+
+    await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
 async def subscribe_team(user_id, team):
     cursor.execute("SELECT * FROM subscriptions WHERE user_id=? AND team=?", (user_id, team))
     if not cursor.fetchone():
@@ -608,6 +650,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("table_"):
         league_key = data.replace("table_", "")
         await show_table(query, league_key)
+        return
+
+    if data.startswith("teams_"):
+        league_key = data.replace("teams_", "")
+        await show_league_teams(query, league_key)
         return
 
     if data == "ucl_playoff":
