@@ -438,7 +438,9 @@ async def show_table(update, league_key):
         else:
             text += f"<b>{pos}.</b> {team}\n"
         text += f"   {pts} очков | И:{played} В:{won} Н:{draw} П:{lost}\n\n"
-
+        
+    print(f"Текст таблицы (начало): {text[:500]}")
+    
     if loading_msg:
         await loading_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
     else:
