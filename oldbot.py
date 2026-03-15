@@ -267,10 +267,8 @@ def league_menu(league_key):
     async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await update_user_stats(user.id, user.first_name, user.username)
-
     photo_url = "https://i.postimg.cc/KjG5HyBq/f131b037207811f1b6c7eeba09ae9e87.jpg"
     caption = "⚽ <b>Футбольный бот PRO</b>\n\n<i>Выберите лигу:</i>"
-
     await update.message.reply_photo(
         photo=photo_url,
         caption=caption,
