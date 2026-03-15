@@ -8,6 +8,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import telegram
+import re
 
 print(f"🔍 Версия python-telegram-bot: {telegram.__version__}")
 
@@ -23,21 +24,8 @@ LEAGUES = {
     "ucl": {"id": "CL", "name": "Лига Чемпионов", "logo": "🏆"}
 }
 
-# ================== ПРЕМИУМ-ЭМОДЗИ ==================
-# Цифры 1-9
-DIGIT_EMOJIS = {
-    1: "5188399349167589164",
-    2: "5190499034124551179",
-    3: "5190486368265995588",
-    4: "5190448443704772486",
-    5: "5188147436450776140",
-    6: "5190822449456908974",
-    7: "5190402324345952285",
-    8: "5190579517516710767",
-    9: "5188666655047188275"
-}
-
-# Прочие эмодзи
+# ================== ПРЕМИУМ-ЭМОДЗИ (ТВОИ) ==================
+# Цифры в таблицах заменены на стандартные (чтобы избежать ошибок), остальные оставлены
 BALL_EMOJI_ID = "5375159220280762629"          # ⚽ мяч
 BELL_EMOJI_ID = "5458603043203327669"           # 🔔 колокольчик
 STAR_EMOJI_ID = "5438496463044752972"           # ⭐ звезда
@@ -151,35 +139,23 @@ async def fetch_matches(competition_id, date_from, date_to):
 async def fetch_standings(competition_id):
     cache_key = f"standings_{competition_id}"
     if cache_key in cache['standings']:
-        print(f"📦 standings из кэша: {competition_id}")
         return cache['standings'][cache_key]
 
     url = f"https://api.football-data.org/v4/competitions/{competition_id}/standings"
     headers = {"X-Auth-Token": FOOTBALL_DATA_TOKEN}
-    print(f"🔍 Запрос standings: {url}")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url, headers=headers)
-            print(f"📡 Статус standings: {resp.status_code}")
             if resp.status_code == 200:
                 data = resp.json()
-                print("📦 Ответ API (первые 500 символов):", str(data)[:500])
                 if "standings" in data and len(data["standings"]) > 0:
                     table = data["standings"][0]["table"]
                     cache['standings'][cache_key] = table
-                    print(f"✅ Получено {len(table)} команд")
                     return table
-                else:
-                    print("⚠️ В ответе нет standings или они пусты")
-                    return []
-            else:
-                print(f"⚠️ Ошибка standings: {resp.status_code}")
-                print(f"📄 Текст ответа: {resp.text[:200]}")
-                return []
+            print(f"⚠️ Ошибка таблицы: {resp.status_code}")
+            return []
     except Exception as e:
-        import traceback
-        print(f"❌ Исключение в standings: {e}")
-        traceback.print_exc()
+        print(f"❌ Ошибка standings: {e}")
         return []
 
 async def fetch_live_matches():
@@ -396,7 +372,7 @@ async def matches_next_48h(update, league_key):
     else:
         await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
 
-# ================== ТАБЛИЦА (с премиум-цифрами) ==================
+# ================== ТАБЛИЦА (со стандартными цифрами 1️⃣2️⃣3️⃣) ==================
 async def show_table(update, league_key):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -422,9 +398,8 @@ async def show_table(update, league_key):
             await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
         return
 
-    # Формируем таблицу с премиум-эмодзи, если есть
     text = f"{league['logo']} <b>ТАБЛИЦА {league['name']}</b>\n\n"
-    for row in table[:9]:
+    for row in table[:9]:  # первые 9 мест
         pos = row["position"]
         team = row["team"]["name"]
         pts = row["points"]
@@ -433,19 +408,16 @@ async def show_table(update, league_key):
         draw = row["draw"]
         lost = row["lost"]
 
-        # Пробуем использовать премиум-эмодзи
-        if pos in DIGIT_EMOJIS:
-            pos_emoji = f'<tg-emoji emoji-id="{DIGIT_EMOJIS[pos]}">{pos}</tg-emoji>'
-            text += f"{pos_emoji} <b>{team}</b>\n"
-        else:
-            text += f"<b>{pos}.</b> {team}\n"
+        # Используем стандартные эмодзи-цифры (1️⃣, 2️⃣, 3️⃣ …)
+        pos_emoji = {
+            1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣",
+            6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣"
+        }.get(pos, f"{pos}.")
+        text += f"{pos_emoji} <b>{team}</b>\n"
         text += f"   {pts} очков | И:{played} В:{won} Н:{draw} П:{lost}\n\n"
 
-    # Отладочный вывод
     print(f"Длина текста таблицы: {len(text)} символов")
-    print(f"Текст таблицы (начало): {text[:500]}")
 
-    # Пытаемся отправить с HTML
     try:
         if loading_msg:
             await loading_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
@@ -453,11 +425,9 @@ async def show_table(update, league_key):
             await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
     except Exception as e:
         print(f"❌ Ошибка при отправке таблицы с HTML: {e}")
-        # Если ошибка, пробуем отправить без HTML (обычный текст)
+        # Если ошибка, отправляем без HTML
+        plain_text = re.sub(r'<[^>]+>', '', text)
         try:
-            # Убираем все HTML-теги
-            import re
-            plain_text = re.sub(r'<[^>]+>', '', text)
             if loading_msg:
                 await loading_msg.edit_text(plain_text, reply_markup=back_keyboard)
             else:
@@ -465,6 +435,7 @@ async def show_table(update, league_key):
             print("✅ Отправлена таблица без HTML-разметки")
         except Exception as e2:
             print(f"❌ Не удалось отправить даже обычный текст: {e2}")
+
 # ================== LIVE МАТЧИ (с премиум-мячом) ==================
 async def live_matches(update):
     user = update.from_user
@@ -532,7 +503,6 @@ async def goal_live_menu(update):
         home_ru = translate_team(home)
         away_ru = translate_team(away)
         text += f"• {home_ru} vs {away_ru} ({league})\n"
-        # В кнопках нельзя HTML, оставляем обычный 🔔
         keyboard.append([InlineKeyboardButton(
             f"🔔 {home_ru} – {away_ru}",
             callback_data=f"goal_sub_{match_id}"
@@ -903,7 +873,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================== ЗАПУСК ==================
 def main():
     print("=" * 60)
-    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (премиум-эмодзи + статическая ЛЧ)")
+    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (премиум-эмодзи, таблицы с цифрами)")
     print("=" * 60)
     print("✅ Таблицы и расписание: football-data.org")
     print("✅ Live-матчи и события: football-data.org")
@@ -915,7 +885,6 @@ def main():
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    # Создаём новый цикл для Python 3.14+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.create_task(match_checker(app))
