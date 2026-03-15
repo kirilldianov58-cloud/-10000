@@ -9,7 +9,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # ================== НАСТРОЙКИ ==================
-TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"  # замените на свой токен
+TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"  # правильный токен
 FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6baf095fb95ce0deb0"  # токен football-data.org
 
 # ID лиг в football-data.org
@@ -21,7 +21,7 @@ LEAGUES = {
     "ucl": {"id": "CL", "name": "Лига Чемпионов", "logo": "🏆"}
 }
 
-# Словарь перевода названий команд на русский (дополняйте по мере необходимости)
+# Словарь перевода названий команд на русский (можно дополнять)
 TEAM_TRANSLATIONS = {
     "Real Madrid": "Реал Мадрид",
     "Elche": "Эльче",
@@ -37,7 +37,6 @@ TEAM_TRANSLATIONS = {
     "Stade Brestois": "Брест",
     "Vitória": "Витория",
     "Atlético Mineiro": "Атлетико Минейро",
-    # добавьте другие команды по желанию
 }
 
 def translate_team(name):
@@ -141,24 +140,6 @@ async def fetch_live_matches():
         print(f"❌ Ошибка запроса live: {e}")
         return []
 
-async def fetch_league_teams(competition_id):
-    """Получает список команд лиги из football-data.org"""
-    url = f"https://api.football-data.org/v4/competitions/{competition_id}/teams"
-    headers = {"X-Auth-Token": FOOTBALL_DATA_TOKEN}
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers=headers)
-            if resp.status_code == 200:
-                data = resp.json()
-                teams = data.get("teams", [])
-                return [team["name"] for team in teams]
-            else:
-                print(f"⚠️ Ошибка получения команд: {resp.status_code}")
-                return []
-    except Exception as e:
-        print(f"❌ Ошибка запроса команд: {e}")
-        return []
-
 # ================== ВРЕМЯ ==================
 def utc_to_msk(utc_time_str):
     try:
@@ -190,29 +171,29 @@ UCL_PLAYOFF = {
         "first_leg_dates": "10–11 марта 2026",
         "second_leg_dates": "17–18 марта 2026",
         "matches": [
-            {"home_first": "Галатасарай", "away_first": "Ливерпуль",
-             "home_second": "Ливерпуль", "away_second": "Галатасарай",
+            {"home_first": "Галатасарай", "away_first": "Ливерпуль", 
+             "home_second": "Ливерпуль", "away_second": "Галатасарай", 
              "first_score": "1:0", "second_score": "—"},
-            {"home_first": "Аталанта", "away_first": "Бавария",
-             "home_second": "Бавария", "away_second": "Аталанта",
+            {"home_first": "Аталанта", "away_first": "Бавария", 
+             "home_second": "Бавария", "away_second": "Аталанта", 
              "first_score": "6:1", "second_score": "—"},
-            {"home_first": "Атлетико", "away_first": "Тоттенхэм",
-             "home_second": "Тоттенхэм", "away_second": "Атлетико",
+            {"home_first": "Атлетико", "away_first": "Тоттенхэм", 
+             "home_second": "Тоттенхэм", "away_second": "Атлетико", 
              "first_score": "5:2", "second_score": "—"},
-            {"home_first": "Ньюкасл", "away_first": "Барселона",
-             "home_second": "Барселона", "away_second": "Ньюкасл",
+            {"home_first": "Ньюкасл", "away_first": "Барселона", 
+             "home_second": "Барселона", "away_second": "Ньюкасл", 
              "first_score": "1:1", "second_score": "—"},
-            {"home_first": "Байер", "away_first": "Арсенал",
-             "home_second": "Арсенал", "away_second": "Байер",
+            {"home_first": "Байер", "away_first": "Арсенал", 
+             "home_second": "Арсенал", "away_second": "Байер", 
              "first_score": "1:1", "second_score": "—"},
-            {"home_first": "Буде-Глимт", "away_first": "Спортинг",
-             "home_second": "Спортинг", "away_second": "Буде-Глимт",
+            {"home_first": "Буде-Глимт", "away_first": "Спортинг", 
+             "home_second": "Спортинг", "away_second": "Буде-Глимт", 
              "first_score": "3:0", "second_score": "—"},
-            {"home_first": "ПСЖ", "away_first": "Челси",
-             "home_second": "Челси", "away_second": "ПСЖ",
+            {"home_first": "ПСЖ", "away_first": "Челси", 
+             "home_second": "Челси", "away_second": "ПСЖ", 
              "first_score": "5:2", "second_score": "—"},
-            {"home_first": "Реал Мадрид", "away_first": "Манчестер Сити",
-             "home_second": "Манчестер Сити", "away_second": "Реал Мадрид",
+            {"home_first": "Реал Мадрид", "away_first": "Манчестер Сити", 
+             "home_second": "Манчестер Сити", "away_second": "Реал Мадрид", 
              "first_score": "3:0", "second_score": "—"}
         ]
     },
@@ -236,14 +217,38 @@ UCL_PLAYOFF = {
 # ================== МЕНЮ ==================
 def main_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🏴󠁧󠁢󠁥󠁮󠁧󠁿 АПЛ", callback_data="league_apl"),
-         InlineKeyboardButton("🇪🇸 Ла Лига", callback_data="league_laliga")],
-        [InlineKeyboardButton("🇩🇪 Бундеслига", callback_data="league_bundesliga"),
-         InlineKeyboardButton("🇮🇹 Серия А", callback_data="league_seriea")],
-        [InlineKeyboardButton("🏆 Лига Чемпионов", callback_data="league_ucl")],
-        [InlineKeyboardButton("🔴 LIVE матчи", callback_data="live")],
-        [InlineKeyboardButton("⚽ LIVE статистика", callback_data="goal_live")],
-        [InlineKeyboardButton("⭐ Мои подписки", callback_data="my_subs")]
+        [
+            InlineKeyboardButton("🏴󠁧󠁢󠁥󠁮󠁧󠁿 АПЛ", callback_data="league_apl"),
+            InlineKeyboardButton("🇪🇸 Ла Лига", callback_data="league_laliga")
+        ],
+        [
+            InlineKeyboardButton("🇩🇪 Бундеслига", callback_data="league_bundesliga"),
+            InlineKeyboardButton("🇮🇹 Серия А", callback_data="league_seriea")
+        ],
+        [
+            InlineKeyboardButton(
+                text="🏆 Лига Чемпионов",
+                callback_data="league_ucl",
+                icon_custom_emoji_id="5434052314354699255"  # новый ID для ЛЧ
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="LIVE матчи",
+                callback_data="live",
+                icon_custom_emoji_id="5215667808767059302"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="Голы и карточки LIVE",  # новое название
+                callback_data="goal_live",
+                icon_custom_emoji_id="5215667808767059302"
+            )
+        ],
+        [
+            InlineKeyboardButton("⭐ Мои подписки", callback_data="my_subs")
+        ]
     ])
 
 def league_menu(league_key):
@@ -251,17 +256,31 @@ def league_menu(league_key):
     if league_key == "ucl":
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("🏆 Плей-офф 2025/26", callback_data="ucl_playoff")],
-            [InlineKeyboardButton("📅 Матчи (48ч)", callback_data=f"matches_{league_key}")],
+            [InlineKeyboardButton(
+                text="📅 Ближайшие матчи в течение 48ч",
+                callback_data=f"matches_{league_key}",
+                icon_custom_emoji_id="5274055917766202507"
+            )],
             [InlineKeyboardButton("📊 Таблица", callback_data=f"table_{league_key}")],
-            [InlineKeyboardButton("⭐ Подписаться на команду", callback_data=f"teams_{league_key}")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]
+            [InlineKeyboardButton(
+                text="🔙 Назад",
+                callback_data="back_to_main",
+                icon_custom_emoji_id="5258236805890710909"
+            )]
         ])
     else:
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("📅 Матчи (48ч)", callback_data=f"matches_{league_key}")],
+            [InlineKeyboardButton(
+                text="📅 Ближайшие матчи в течение 48ч",
+                callback_data=f"matches_{league_key}",
+                icon_custom_emoji_id="5274055917766202507"
+            )],
             [InlineKeyboardButton("📊 Таблица", callback_data=f"table_{league_key}")],
-            [InlineKeyboardButton("⭐ Подписаться на команду", callback_data=f"teams_{league_key}")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]
+            [InlineKeyboardButton(
+                text="🔙 Назад",
+                callback_data="back_to_main",
+                icon_custom_emoji_id="5258236805890710909"
+            )]
         ])
 
 # ================== START ==================
@@ -269,7 +288,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await update_user_stats(user.id, user.first_name, user.username)
     await update.message.reply_text(
-        "⚽ <b>Футбольный бот PRO</b>\n\n<i>Выберите лигу:</i>",
+        f"<tg-emoji emoji-id='5377799315202783755'>⚽</tg-emoji> <b>Футбольный бот PRO</b>\n\n<i>Выберите лигу:</i>",
         parse_mode=ParseMode.HTML,
         reply_markup=main_menu()
     )
@@ -370,7 +389,7 @@ async def show_table(update, league_key):
     else:
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-# ================== LIVE МАТЧИ ==================
+# ================== LIVE МАТЧИ (ОБЩИЙ СПИСОК) ==================
 async def live_matches(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -401,6 +420,7 @@ async def live_matches(update):
         else:
             minute = ""
 
+        # перевод команд
         home_ru = translate_team(home)
         away_ru = translate_team(away)
 
@@ -419,7 +439,7 @@ async def goal_live_menu(update):
     matches = await fetch_live_matches()
     if not matches:
         await update.message.reply_text(
-            "⚽ <b>LIVE статистика</b>\n\n<i>Сейчас нет матчей в прямом эфире</i>",
+            "⚽ <b>Голы и карточки LIVE</b>\n\n<i>Сейчас нет матчей в прямом эфире</i>",
             parse_mode=ParseMode.HTML,
             reply_markup=main_menu()
         )
@@ -439,7 +459,11 @@ async def goal_live_menu(update):
             f"🔔 {home_ru} – {away_ru}",
             callback_data=f"goal_sub_{match_id}"
         )])
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")])
+    keyboard.append([InlineKeyboardButton(
+        text="🔙 Назад",
+        callback_data="back_to_main",
+        icon_custom_emoji_id="5258236805890710909"
+    )])
 
     await update.message.reply_text(
         text,
@@ -472,41 +496,45 @@ async def goal_unsubscribe(update, match_id):
         reply_markup=main_menu()
     )
 
-# ================== ПОДПИСКА НА КОМАНДЫ ==================
-async def show_league_teams(update, league_key):
+# ================== ЛИГА ЧЕМПИОНОВ – ПЛЕЙ-ОФФ ==================
+async def ucl_playoff(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
 
-    league = LEAGUES[league_key]
-    await update.message.reply_text(f"⏳ Загружаю команды {league['name']}...")
+    text = "🏆 <b>ЛИГА ЧЕМПИОНОВ 2025/26 – 1/8 ФИНАЛА</b>\n\n"
+    
+    r16 = UCL_PLAYOFF["round_of_16"]
+    text += f"<b>Первые матчи:</b> {r16['first_leg_dates']}\n"
+    text += f"<b>Ответные матчи:</b> {r16['second_leg_dates']}\n\n"
+    
+    for match in r16["matches"]:
+        text += f"⚔️ <b>{match['home_first']} – {match['away_first']}</b>"
+        if match['first_score'] != "—":
+            text += f"  {match['first_score']}"
+        text += f"\n   🏠 ответный: {match['home_second']} – {match['away_second']}"
+        if match['second_score'] != "—":
+            text += f"  {match['second_score']}"
+        text += "\n\n"
+    
+    qf = UCL_PLAYOFF["quarterfinals"]
+    text += f"<b>{qf['name']}</b> ({qf['dates']})\n"
+    for m in qf["matches"]:
+        text += f"   {m['info']}\n"
+    text += "\n"
+    
+    sf = UCL_PLAYOFF["semifinals"]
+    text += f"<b>{sf['name']}</b> ({sf['dates']})\n"
+    for m in sf["matches"]:
+        text += f"   {m['info']}\n"
+    text += "\n"
+    
+    final = UCL_PLAYOFF["final"]
+    text += f"<b>{final['name']}</b> ({final['date']})\n"
+    text += f"   {final['match']['info']}\n"
 
-    teams = await fetch_league_teams(league["id"])
-    if not teams:
-        await update.message.reply_text(
-            f"❌ Не удалось загрузить команды {league['name']}",
-            reply_markup=main_menu()
-        )
-        return
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-    text = f"{league['logo']} <b>Команды {league['name']}</b>\n\n"
-    keyboard = []
-    # Разбиваем по две команды в ряд
-    for i in range(0, len(teams), 2):
-        row = []
-        team1 = teams[i]
-        row.append(InlineKeyboardButton(team1, callback_data=f"sub_team_{team1}"))
-        if i+1 < len(teams):
-            team2 = teams[i+1]
-            row.append(InlineKeyboardButton(team2, callback_data=f"sub_team_{team2}"))
-        keyboard.append(row)
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"league_{league_key}")])
-
-    await update.message.reply_text(
-        text,
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
+# ================== ПОДПИСКИ (на команды) ==================
 async def subscribe_team(user_id, team):
     cursor.execute("SELECT * FROM subscriptions WHERE user_id=? AND team=?", (user_id, team))
     if not cursor.fetchone():
@@ -519,7 +547,6 @@ async def unsubscribe_team(user_id, team):
     cursor.execute("DELETE FROM subscriptions WHERE user_id=? AND team=?", (user_id, team))
     conn.commit()
 
-# ================== МОИ ПОДПИСКИ ==================
 async def my_subscriptions(update, user_id):
     await update_user_stats(update.from_user.id, update.from_user.first_name, update.from_user.username)
 
@@ -556,51 +583,17 @@ async def my_subscriptions(update, user_id):
     if goal_subs:
         for mid in goal_subs:
             keyboard.append([InlineKeyboardButton(f"❌ Отписаться от матча {mid}", callback_data=f"goal_unsub_{mid}")])
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")])
+    keyboard.append([InlineKeyboardButton(
+        text="🔙 Назад",
+        callback_data="back_to_main",
+        icon_custom_emoji_id="5258236805890710909"
+    )])
 
     await update.message.reply_text(
         text,
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
-
-# ================== ЛИГА ЧЕМПИОНОВ – ПЛЕЙ-ОФФ ==================
-async def ucl_playoff(update):
-    user = update.from_user
-    await update_user_stats(user.id, user.first_name, user.username)
-
-    text = "🏆 <b>ЛИГА ЧЕМПИОНОВ 2025/26 – 1/8 ФИНАЛА</b>\n\n"
-
-    r16 = UCL_PLAYOFF["round_of_16"]
-    text += f"<b>Первые матчи:</b> {r16['first_leg_dates']}\n"
-    text += f"<b>Ответные матчи:</b> {r16['second_leg_dates']}\n\n"
-
-    for match in r16["matches"]:
-        text += f"⚔️ <b>{match['home_first']} – {match['away_first']}</b>"
-        if match['first_score'] != "—":
-            text += f"  {match['first_score']}"
-        text += f"\n   🏠 ответный: {match['home_second']} – {match['away_second']}"
-        if match['second_score'] != "—":
-            text += f"  {match['second_score']}"
-        text += "\n\n"
-
-    qf = UCL_PLAYOFF["quarterfinals"]
-    text += f"<b>{qf['name']}</b> ({qf['dates']})\n"
-    for m in qf["matches"]:
-        text += f"   {m['info']}\n"
-    text += "\n"
-
-    sf = UCL_PLAYOFF["semifinals"]
-    text += f"<b>{sf['name']}</b> ({sf['dates']})\n"
-    for m in sf["matches"]:
-        text += f"   {m['info']}\n"
-    text += "\n"
-
-    final = UCL_PLAYOFF["final"]
-    text += f"<b>{final['name']}</b> ({final['date']})\n"
-    text += f"   {final['match']['info']}\n"
-
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ================== ОБРАБОТЧИК КНОПОК ==================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -637,11 +630,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("table_"):
         league_key = data.replace("table_", "")
         await show_table(query, league_key)
-        return
-
-    if data.startswith("teams_"):
-        league_key = data.replace("teams_", "")
-        await show_league_teams(query, league_key)
         return
 
     if data == "ucl_playoff":
@@ -751,7 +739,7 @@ async def match_checker(app):
         await asyncio.sleep(30)
 
 # ================== СТАТИСТИКА (ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА) ==================
-OWNER_ID = 6298119477 # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID
+OWNER_ID = 6298119477  # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -796,12 +784,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================== ЗАПУСК ==================
 def main():
     print("=" * 60)
-    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (с подпиской на команды)")
+    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (только football-data.org)")
     print("=" * 60)
     print("✅ Таблицы и расписание: football-data.org")
     print("✅ Live-матчи и события: football-data.org")
     print("✅ Уведомления о голах (по изменению счёта)")
-    print("✅ Подписка на команды")
     print("=" * 60)
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
