@@ -266,8 +266,17 @@ def league_menu(league_key):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await update_user_stats(user.id, user.first_name, user.username)
+
     photo_url = "https://i.postimg.cc/RVfDJvGC/START.jpg"
-    caption = "⚽ <b>Футбольный бот PRO</b>\n\n<i>Выберите лигу:</i>"
+    caption = (
+        '<tg-emoji emoji-id="5375159220280762629">⚽</tg-emoji> '
+        '<b>Футбольный бот PRO</b>\n\n'
+        '<tg-emoji emoji-id="5278687348505198697">🏆</tg-emoji> <b>Лига чемпионов 2025/26</b> – результаты плей-офф\n'
+        '<tg-emoji emoji-id="5368733077327595177">🟨</tg-emoji> <b>Голы и карточки LIVE</b> – подпишись на события\n'
+        '<tg-emoji emoji-id="5274055917766202507">📊</tg-emoji> <b>Турнирные таблицы</b> топ-лиг\n\n'
+        '<i>👇 Выберите лигу в меню ниже:</i>'
+    )
+
     await update.message.reply_photo(
         photo=photo_url,
         caption=caption,
