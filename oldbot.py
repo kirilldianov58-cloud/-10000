@@ -423,7 +423,7 @@ async def show_table(update, league_key):
         return
 
     text = f"{league['logo']} <b>ТАБЛИЦА {league['name']}</b>\n\n"
-    for row in table[:9]:  # только первые 9 мест для красоты
+    for row in table[:9]:  # только первые 9 мест для премиум-цифр
         pos = row["position"]
         team = row["team"]["name"]
         pts = row["points"]
@@ -432,10 +432,15 @@ async def show_table(update, league_key):
         draw = row["draw"]
         lost = row["lost"]
 
-        text += f"<b>{pos}.</b> {team}\n"
+        # Используем премиум-эмодзи для позиций 1-9
+        if pos in DIGIT_EMOJIS:
+            pos_emoji = f'<tg-emoji emoji-id="{DIGIT_EMOJIS[pos]}">{pos}</tg-emoji>'
+            text += f"{pos_emoji} <b>{team}</b>\n"
+        else:
+            text += f"<b>{pos}.</b> {team}\n"
         text += f"   {pts} очков | И:{played} В:{won} Н:{draw} П:{lost}\n\n"
 
-    # Отладочный вывод
+    # Отладочный вывод (можно убрать, когда убедишься, что всё работает)
     print(f"Текст таблицы (начало): {text[:500]}")
 
     if loading_msg:
