@@ -163,6 +163,7 @@ async def fetch_standings(competition_id):
             print(f"📡 Статус standings: {resp.status_code}")
             if resp.status_code == 200:
                 data = resp.json()
+                print("📦 Ответ API (первые 500 символов):", str(data)[:500])
                 if "standings" in data and len(data["standings"]) > 0:
                     table = data["standings"][0]["table"]
                     cache['standings'][cache_key] = table
@@ -170,7 +171,6 @@ async def fetch_standings(competition_id):
                     return table
                 else:
                     print("⚠️ В ответе нет standings или они пусты")
-                    print("📄 Ответ:", data)
                     return []
             else:
                 print(f"⚠️ Ошибка standings: {resp.status_code}")
