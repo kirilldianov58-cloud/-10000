@@ -7,7 +7,7 @@ import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
-
+import telegram; print(f"Версия PTB: {telegram.__version__}")
 # ================== НАСТРОЙКИ ==================
 TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"  # правильный токен
 FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6baf095fb95ce0deb0"  # токен football-data.org
