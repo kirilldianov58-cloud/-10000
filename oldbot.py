@@ -1,6 +1,5 @@
 import asyncio
 import sqlite3
-import os
 from datetime import datetime, timedelta
 import httpx
 from cachetools import TTLCache
@@ -16,7 +15,6 @@ print(f"🔍 Версия python-telegram-bot: {telegram.__version__}")
 TELEGRAM_TOKEN = "7728656883:AAEme2lmHObvqMOoifogEYRiy3LTyk2W5bE"
 FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6baf095fb95ce0deb0"
 
-# ID лиг в football-data.org
 LEAGUES = {
     "apl": {"id": "PL", "name": "АПЛ", "logo": "🏴󠁧󠁢󠁥󠁮󠁧󠁿"},
     "laliga": {"id": "PD", "name": "Ла Лига", "logo": "🇪🇸"},
@@ -25,7 +23,6 @@ LEAGUES = {
     "ucl": {"id": "CL", "name": "Лига Чемпионов", "logo": "🏆"}
 }
 
-# Словарь перевода названий команд на русский
 TEAM_TRANSLATIONS = {
     "Real Madrid": "Реал Мадрид",
     "Elche": "Эльче",
@@ -58,14 +55,12 @@ TEAM_TRANSLATIONS = {
 def translate_team(name):
     return TEAM_TRANSLATIONS.get(name, name)
 
-# Кэш для таблиц и расписания
 cache = {
     'standings': TTLCache(maxsize=50, ttl=900),
     'matches': TTLCache(maxsize=100, ttl=300),
     'live': TTLCache(maxsize=20, ttl=30),
 }
 
-# Часовые пояса
 UTC_TZ = pytz.UTC
 MSK_TZ = pytz.timezone('Europe/Moscow')
 
@@ -230,7 +225,7 @@ UCL_PLAYOFF = {
     }
 }
 
-# ================== МЕНЮ (ЯРКИЕ СТАНДАРТНЫЕ ЭМОДЗИ) ==================
+# ================== МЕНЮ ==================
 def main_menu():
     return InlineKeyboardMarkup([
         [
@@ -295,12 +290,15 @@ async def matches_next_48h(update, league_key):
         loading_msg = await update.message.reply_text(f"⏳ Загружаю матчи {league['name']}...")
         matches = await fetch_matches(league["id"], date_from, date_to)
 
+    # Клавиатура с кнопкой "Назад"
+    back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]])
+
     if not matches:
         text = f"📅 <b>{league['logo']} {league['name']}</b>\n\n<i>Нет матчей с {date_from} по {date_to}</i>"
         if loading_msg:
-            await loading_msg.edit_text(text, parse_mode=ParseMode.HTML)
+            await loading_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
         else:
-            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
         return
 
     text = f"{league['logo']} <b>МАТЧИ {league['name']}</b>\n"
@@ -329,9 +327,9 @@ async def matches_next_48h(update, league_key):
             text += f"⏳ {date_str} {time_str}  <b>{home}</b> vs <b>{away}</b>\n"
 
     if loading_msg:
-        await loading_msg.edit_text(text, parse_mode=ParseMode.HTML)
+        await loading_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
     else:
-        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
 
 # ================== ТАБЛИЦА ==================
 async def show_table(update, league_key):
@@ -349,12 +347,14 @@ async def show_table(update, league_key):
         loading_msg = await update.message.reply_text(f"⏳ Загружаю таблицу {league['name']}...")
         table = await fetch_standings(league["id"])
 
+    back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]])
+
     if not table:
         text = f"📊 <b>{league['logo']} {league['name']}</b>\n\n<i>Нет данных таблицы</i>"
         if loading_msg:
-            await loading_msg.edit_text(text, parse_mode=ParseMode.HTML)
+            await loading_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
         else:
-            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
         return
 
     text = f"{league['logo']} <b>ТАБЛИЦА {league['name']}</b>\n\n"
@@ -369,9 +369,9 @@ async def show_table(update, league_key):
         text += f"<b>{pos}.</b> {team}\n   {pts} очков | И:{played} В:{won} Н:{draw} П:{lost}\n\n"
 
     if loading_msg:
-        await loading_msg.edit_text(text, parse_mode=ParseMode.HTML)
+        await loading_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
     else:
-        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
 
 # ================== LIVE МАТЧИ ==================
 async def live_matches(update):
@@ -412,9 +412,9 @@ async def live_matches(update):
             text += f"  ({minute})"
         text += f"\n   <i>{league_name}</i>\n\n"
 
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=main_menu())
 
-# ================== LIVE СТАТИСТИКА (ПОДПИСКА НА СОБЫТИЯ) ==================
+# ================== LIVE СТАТИСТИКА ==================
 async def goal_live_menu(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -475,7 +475,7 @@ async def goal_unsubscribe(update, match_id):
         reply_markup=main_menu()
     )
 
-# ================== ЛИГА ЧЕМПИОНОВ – ПЛЕЙ-ОФФ ==================
+# ================== ЛИГА ЧЕМПИОНОВ ==================
 async def ucl_playoff(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -506,7 +506,7 @@ async def ucl_playoff(update):
 
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-# ================== ПОДПИСКИ (на команды) ==================
+# ================== ПОДПИСКИ НА КОМАНДЫ ==================
 async def fetch_league_teams(competition_id):
     url = f"https://api.football-data.org/v4/competitions/{competition_id}/teams"
     headers = {"X-Auth-Token": FOOTBALL_DATA_TOKEN}
@@ -580,15 +580,9 @@ async def my_subscriptions(update, user_id):
 
     text = "⭐ <b>МОИ ПОДПИСКИ</b>\n\n"
     if subs:
-        text += "<b>Команды:</b>\n"
-        for team in subs:
-            text += f"• {team}\n"
-        text += "\n"
+        text += "<b>Команды:</b>\n" + "\n".join(f"• {team}" for team in subs) + "\n\n"
     if goal_subs:
-        text += "<b>Матчи (уведомления о событиях):</b>\n"
-        for mid in goal_subs:
-            text += f"• ID матча: {mid}\n"
-        text += "\n"
+        text += "<b>Матчи (уведомления о событиях):</b>\n" + "\n".join(f"• ID матча: {mid}" for mid in goal_subs) + "\n\n"
 
     keyboard = []
     if subs:
