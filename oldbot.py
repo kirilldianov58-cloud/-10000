@@ -151,23 +151,35 @@ async def fetch_matches(competition_id, date_from, date_to):
 async def fetch_standings(competition_id):
     cache_key = f"standings_{competition_id}"
     if cache_key in cache['standings']:
+        print(f"📦 standings из кэша: {competition_id}")
         return cache['standings'][cache_key]
 
     url = f"https://api.football-data.org/v4/competitions/{competition_id}/standings"
     headers = {"X-Auth-Token": FOOTBALL_DATA_TOKEN}
+    print(f"🔍 Запрос standings: {url}")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url, headers=headers)
+            print(f"📡 Статус standings: {resp.status_code}")
             if resp.status_code == 200:
                 data = resp.json()
                 if "standings" in data and len(data["standings"]) > 0:
                     table = data["standings"][0]["table"]
                     cache['standings'][cache_key] = table
+                    print(f"✅ Получено {len(table)} команд")
                     return table
-            print(f"⚠️ Ошибка таблицы: {resp.status_code}")
-            return []
+                else:
+                    print("⚠️ В ответе нет standings или они пусты")
+                    print("📄 Ответ:", data)
+                    return []
+            else:
+                print(f"⚠️ Ошибка standings: {resp.status_code}")
+                print(f"📄 Текст ответа: {resp.text[:200]}")
+                return []
     except Exception as e:
-        print(f"❌ Ошибка standings: {e}")
+        import traceback
+        print(f"❌ Исключение в standings: {e}")
+        traceback.print_exc()
         return []
 
 async def fetch_live_matches():
