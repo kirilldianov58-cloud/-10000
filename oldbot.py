@@ -700,6 +700,43 @@ async def ucl_playoff(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
     sent = await query.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
     last_message_ids[chat_id] = sent.message_id
 
+# ================== ПОДПИСКИ НА КОМАНДЫ (ДОБАВЛЕННАЯ ФУНКЦИЯ) ==================
+async def show_league_teams(update, league_key):
+    user = update.from_user
+    await update_user_stats(user.id, user.first_name, user.username)
+    chat_id = update.message.chat.id
+    await delete_previous_message(chat_id, update.get_bot())
+
+    league = LEAGUES[league_key]
+    await update.message.reply_text(f"⏳ Загружаю команды {league['name']}...")
+
+    # Получаем таблицу (она уже в кэше)
+    table = await fetch_standings(league["id"])
+    if not table:
+        sent = await update.message.reply_text(f"❌ Не удалось загрузить команды", reply_markup=main_menu())
+        last_message_ids[chat_id] = sent.message_id
+        return
+
+    # Извлекаем названия команд
+    teams = [row["team"]["name"] for row in table]
+
+    text = f"{league['logo']} <b>Команды {league['name']}</b>\n\n"
+    keyboard = []
+    for i in range(0, len(teams), 2):
+        row = []
+        row.append(InlineKeyboardButton(teams[i], callback_data=f"sub_team_{teams[i]}"))
+        if i+1 < len(teams):
+            row.append(InlineKeyboardButton(teams[i+1], callback_data=f"sub_team_{teams[i+1]}"))
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"league_{league_key}")])
+
+    sent = await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    last_message_ids[chat_id] = sent.message_id
+
 async def subscribe_team(user_id, team):
     cursor.execute("SELECT * FROM subscriptions WHERE user_id=? AND team=?", (user_id, team))
     if not cursor.fetchone():
