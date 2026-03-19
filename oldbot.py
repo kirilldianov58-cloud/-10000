@@ -666,8 +666,11 @@ async def ucl_playoff(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
         home_second_emoji = f'<tg-emoji emoji-id="{TEAM_EMOJIS.get(m["home_second"], BALL_EMOJI_ID)}">⚽</tg-emoji>'
         away_second_emoji = f'<tg-emoji emoji-id="{TEAM_EMOJIS.get(m["away_second"], BALL_EMOJI_ID)}">⚽</tg-emoji>'
 
-        text += f"{home_emoji} {home_first_emoji} {home_first_ru} – {away_first_ru} {away_first_emoji} {m['first_score']}\n"
-        text += f"   ответный: {home_second_emoji} {home_second_ru} – {away_second_ru} {away_second_emoji} {m['second_score']}\n"
+        # Первый матч
+        text += f"{home_emoji} {home_first_emoji} {home_first_ru} – {away_first_ru} {away_first_emoji} {plane_emoji}  {m['first_score']}\n"
+        # Ответный матч
+        text += f"   ответный: {home_emoji} {home_second_emoji} {home_second_ru} – {away_second_ru} {away_second_emoji} {plane_emoji}  {m['second_score']}\n"
+        # Общий счёт
         text += f"   <b>Общий счёт:</b> {m['agg']} – {m['winner']} выходит в 1/4\n\n"
 
     # 1/4 финала
@@ -695,53 +698,6 @@ async def ucl_playoff(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
     back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]])
 
     sent = await query.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
-    last_message_ids[chat_id] = sent.message_id
-
-# ================== ПОДПИСКИ НА КОМАНДЫ ==================
-async def fetch_league_teams(competition_id):
-    url = f"https://api.football-data.org/v4/competitions/{competition_id}/teams"
-    headers = {"X-Auth-Token": FOOTBALL_DATA_TOKEN}
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers=headers)
-            if resp.status_code == 200:
-                data = resp.json()
-                return [team["name"] for team in data.get("teams", [])]
-            else:
-                return []
-    except Exception:
-        return []
-
-async def show_league_teams(update, league_key):
-    user = update.from_user
-    await update_user_stats(user.id, user.first_name, user.username)
-    chat_id = update.message.chat.id
-    await delete_previous_message(chat_id, update.get_bot())
-
-    league = LEAGUES[league_key]
-    await update.message.reply_text(f"⏳ Загружаю команды {league['name']}...")
-
-    teams = await fetch_league_teams(league["id"])
-    if not teams:
-        sent = await update.message.reply_text(f"❌ Не удалось загрузить команды", reply_markup=main_menu())
-        last_message_ids[chat_id] = sent.message_id
-        return
-
-    text = f"{league['logo']} <b>Команды {league['name']}</b>\n\n"
-    keyboard = []
-    for i in range(0, len(teams), 2):
-        row = []
-        row.append(InlineKeyboardButton(teams[i], callback_data=f"sub_team_{teams[i]}"))
-        if i+1 < len(teams):
-            row.append(InlineKeyboardButton(teams[i+1], callback_data=f"sub_team_{teams[i+1]}"))
-        keyboard.append(row)
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"league_{league_key}")])
-
-    sent = await update.message.reply_text(
-        text,
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
     last_message_ids[chat_id] = sent.message_id
 
 async def subscribe_team(user_id, team):
