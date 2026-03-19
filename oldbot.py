@@ -292,53 +292,25 @@ UCL_PLAYOFF_STATIC = {
     }
 }
 
-# ================== МЕНЮ ==================
+# ================== МЕНЮ (ТОЛЬКО ОБЫЧНЫЕ ЭМОДЗИ) ==================
 def main_menu():
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(
-                text="АПЛ",
-                callback_data="league_apl",
-                icon_custom_emoji_id="5440855216134043525"
-            ),
-            InlineKeyboardButton(
-                text="Ла Лига",
-                callback_data="league_laliga",
-                icon_custom_emoji_id="5438475709762777893"
-            )
+            InlineKeyboardButton("🏴󠁧󠁢󠁥󠁮󠁧󠁿 АПЛ", callback_data="league_apl"),
+            InlineKeyboardButton("🇪🇸 Ла Лига", callback_data="league_laliga")
         ],
         [
-            InlineKeyboardButton(
-                text="Бундеслига",
-                callback_data="league_bundesliga",
-                icon_custom_emoji_id="5433698383279706493"
-            ),
-            InlineKeyboardButton(
-                text="Серия А",
-                callback_data="league_seriea",
-                icon_custom_emoji_id="5251500918486081233"
-            )
+            InlineKeyboardButton("🇩🇪 Бундеслига", callback_data="league_bundesliga"),
+            InlineKeyboardButton("🇮🇹 Серия А", callback_data="league_seriea")
         ],
         [
-            InlineKeyboardButton(
-                text="Лига Чемпионов",
-                callback_data="league_ucl",
-                icon_custom_emoji_id="5434052314354699255"
-            )
+            InlineKeyboardButton("🏆 Лига Чемпионов", callback_data="league_ucl")
         ],
         [
-            InlineKeyboardButton(
-                text="LIVE матчи",
-                callback_data="live",
-                icon_custom_emoji_id="5215667808767059302"
-            )
+            InlineKeyboardButton("🔴 LIVE матчи", callback_data="live")
         ],
         [
-            InlineKeyboardButton(
-                text="Голы и карточки LIVE",
-                callback_data="goal_live",
-                icon_custom_emoji_id="5215667808767059302"
-            )
+            InlineKeyboardButton("🔔 Голы и карточки LIVE", callback_data="goal_live")
         ],
         [
             InlineKeyboardButton("⭐ Мои подписки", callback_data="my_subs")
@@ -349,58 +321,16 @@ def league_menu(league_key):
     league = LEAGUES[league_key]
     if league_key == "ucl":
         return InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    text="🏆 Плей-офф 2025/26",
-                    callback_data="ucl_playoff",
-                    icon_custom_emoji_id="5434052314354699255"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Ближайшие матчи в течение 48ч",
-                    callback_data=f"matches_{league_key}",
-                    icon_custom_emoji_id="5274055917766202507"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Таблица",
-                    callback_data=f"table_{league_key}",
-                    icon_custom_emoji_id="5188147436450776140"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Назад",
-                    callback_data="back_to_main",
-                    icon_custom_emoji_id="5258236805890710909"
-                )
-            ]
+            [InlineKeyboardButton("🏆 Плей-офф 2025/26", callback_data="ucl_playoff")],
+            [InlineKeyboardButton("📅 Ближайшие матчи в течение 48ч", callback_data=f"matches_{league_key}")],
+            [InlineKeyboardButton("📊 Таблица", callback_data=f"table_{league_key}")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]
         ])
     else:
         return InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    text="Ближайшие матчи в течение 48ч",
-                    callback_data=f"matches_{league_key}",
-                    icon_custom_emoji_id="5274055917766202507"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Таблица",
-                    callback_data=f"table_{league_key}",
-                    icon_custom_emoji_id="5188147436450776140"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Назад",
-                    callback_data="back_to_main",
-                    icon_custom_emoji_id="5258236805890710909"
-                )
-            ]
+            [InlineKeyboardButton("📅 Ближайшие матчи в течение 48ч", callback_data=f"matches_{league_key}")],
+            [InlineKeyboardButton("📊 Таблица", callback_data=f"table_{league_key}")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]
         ])
 
 # ================== START ==================
@@ -408,7 +338,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await update_user_stats(user.id, user.first_name, user.username)
     await update.message.reply_text(
-        f"<tg-emoji emoji-id='5377799315202783755'>⚽</tg-emoji> <b>Футбольный бот PRO</b>\n\n<i>Выберите лигу:</i>",
+        "⚽ <b>Футбольный бот PRO</b>\n\n<i>Выберите лигу:</i>",
         parse_mode=ParseMode.HTML,
         reply_markup=main_menu()
     )
@@ -493,20 +423,10 @@ async def show_table(query, league_key):
             await query.edit_message_text(text, parse_mode=ParseMode.HTML)
         return
 
-    pos_emojis = {
-        1: "5188399349167589164",
-        2: "5190499034124551179",
-        3: "5190486368265995588",
-        4: "5190448443704772486",
-        5: "5188147436450776140",
-        6: "5190822449456908974",
-        7: "5190402324345952285",
-        8: "5190579517516710767",
-        9: "5188666655047188275",
-    }
-
+    # Эмодзи для позиций (можно добавить, но не обязательно)
+    pos_emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
     text = f"{league['logo']} <b>ТАБЛИЦА {league['name']}</b>\n\n"
-    for row in table[:10]:
+    for idx, row in enumerate(table[:10]):
         team = row["team"]["name"]
         pos = row["position"]
         pts = row["points"]
@@ -514,7 +434,7 @@ async def show_table(query, league_key):
         won = row["won"]
         draw = row["draw"]
         lost = row["lost"]
-        emoji = pos_emojis.get(pos, f"{pos}.")
+        emoji = pos_emojis[idx] if idx < 10 else f"{pos}."
         text += f"{emoji} {team}\n   {pts} очков | И:{played} В:{won} Н:{draw} П:{lost}\n\n"
 
     if loading_msg:
@@ -589,11 +509,7 @@ async def goal_live_menu(query):
             f"🔔 {home_ru} – {away_ru}",
             callback_data=f"goal_sub_{match_id}"
         )])
-    keyboard.append([InlineKeyboardButton(
-        text="Назад",
-        callback_data="back_to_main",
-        icon_custom_emoji_id="5258236805890710909"
-    )])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")])
 
     await query.edit_message_text(
         text,
@@ -706,11 +622,7 @@ async def show_league_teams(query, league_key):
             team2 = teams[i+1]
             row.append(InlineKeyboardButton(team2, callback_data=f"sub_team_{team2}"))
         keyboard.append(row)
-    keyboard.append([InlineKeyboardButton(
-        text="Назад",
-        callback_data=f"league_{league_key}",
-        icon_custom_emoji_id="5258236805890710909"
-    )])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"league_{league_key}")])
 
     await loading_msg.edit_text(
         text,
@@ -754,11 +666,7 @@ async def my_subscriptions(query, user_id):
     if goal_subs:
         for mid in goal_subs:
             keyboard.append([InlineKeyboardButton(f"❌ Отписаться от матча {mid}", callback_data=f"goal_unsub_{mid}")])
-    keyboard.append([InlineKeyboardButton(
-        text="Назад",
-        callback_data="back_to_main",
-        icon_custom_emoji_id="5258236805890710909"
-    )])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")])
 
     await query.edit_message_text(
         text,
@@ -964,7 +872,7 @@ def main():
     print("=" * 60)
     print("✅ football-data.org: live‑матчи, таблицы, расписание")
     print("✅ API-FOOTBALL: Лига чемпионов (автообновление)")
-    print("✅ Кастомные эмодзи и улучшенный дизайн")
+    print("✅ Обычные эмодзи, без кастомных")
     print("✅ Автоудаление: каждое нажатие редактирует сообщение")
     print("=" * 60)
 
