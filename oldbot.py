@@ -9,6 +9,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import telegram
 import re
+import traceback
 
 print(f"🔍 Версия python-telegram-bot: {telegram.__version__}")
 
@@ -25,7 +26,6 @@ LEAGUES = {
 }
 
 # ================== ПРЕМИУМ-ЭМОДЗИ ==================
-# Цифры 1-9
 DIGIT_EMOJIS = {
     1: "5188399349167589164",
     2: "5190499034124551179",
@@ -38,9 +38,6 @@ DIGIT_EMOJIS = {
     9: "5188666655047188275"
 }
 
-# Прочие эмодзи
-# ================== ПРЕМИУМ-ЭМОДЗИ (ТВОИ) ==================
-# Цифры в таблицах заменены на стандартные (чтобы избежать ошибок), остальные оставлены
 BALL_EMOJI_ID = "5375159220280762629"          # ⚽ мяч
 BELL_EMOJI_ID = "5458603043203327669"           # 🔔 колокольчик
 STAR_EMOJI_ID = "5438496463044752972"           # ⭐ звезда
@@ -179,22 +176,206 @@ async def fetch_standings(competition_id):
                 print(f"⚠️ Ошибка standings: {resp.status_code}")
                 print(f"📄 Текст ответа: {resp.text[:200]}")
                 return []
-            print(f"⚠️ Ошибка таблицы: {resp.status_code}")
-            return []
     except Exception as e:
-        import traceback
         print(f"❌ Исключение в standings: {e}")
         traceback.print_exc()
-        print(f"❌ Ошибка standings: {e}")
         return []
 
 async def fetch_live_matches():
-@@ -396,532 +372,525 @@
+    cache_key = "live_matches"
+    if cache_key in cache['live']:
+        return cache['live'][cache_key]
+
+    url = "https://api.football-data.org/v4/matches"
+    params = {"status": "LIVE"}
+    headers = {"X-Auth-Token": FOOTBALL_DATA_TOKEN}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=headers, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                matches = data.get("matches", [])
+                cache['live'][cache_key] = matches
+                return matches
+            else:
+                print(f"⚠️ Ошибка API live: {resp.status_code}")
+                return []
+    except Exception as e:
+        print(f"❌ Ошибка запроса live: {e}")
+        return []
+
+# ================== ВРЕМЯ ==================
+def utc_to_msk(utc_time_str):
+    try:
+        if utc_time_str.endswith('Z'):
+            utc_time_str = utc_time_str[:-1] + '+00:00'
+        utc_dt = datetime.fromisoformat(utc_time_str)
+        if utc_dt.tzinfo is None:
+            utc_dt = UTC_TZ.localize(utc_dt)
+        msk_dt = utc_dt.astimezone(MSK_TZ)
+        return msk_dt
+    except Exception as e:
+        print(f"❌ Ошибка преобразования времени: {e}")
+        return None
+
+# ================== СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ ==================
+async def update_user_stats(user_id, first_name=None, username=None):
+    cursor.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,))
+    if cursor.fetchone():
+        cursor.execute("UPDATE users SET last_seen = CURRENT_TIMESTAMP, commands_count = commands_count + 1 WHERE user_id = ?", (user_id,))
+    else:
+        cursor.execute("INSERT INTO users (user_id, first_name, username, commands_count) VALUES (?, ?, ?, 1)",
+                       (user_id, first_name, username))
+    conn.commit()
+
+# ================== ДАННЫЕ ЛИГИ ЧЕМПИОНОВ (СТАТИЧЕСКИЕ) ==================
+UCL_PLAYOFF = {
+    "round_of_16": {
+        "name": "1/8 финала",
+        "first_leg_dates": "10–11 марта 2026",
+        "second_leg_dates": "17–18 марта 2026",
+        "matches": [
+            {"home_first": "Галатасарай", "away_first": "Ливерпуль",
+             "home_second": "Ливерпуль", "away_second": "Галатасарай",
+             "first_score": "1:0", "second_score": "—"},
+            {"home_first": "Аталанта", "away_first": "Бавария",
+             "home_second": "Бавария", "away_second": "Аталанта",
+             "first_score": "6:1", "second_score": "—"},
+            {"home_first": "Атлетико Мадрид", "away_first": "Тоттенхэм",
+             "home_second": "Тоттенхэм", "away_second": "Атлетико Мадрид",
+             "first_score": "5:2", "second_score": "—"},
+            {"home_first": "Ньюкасл", "away_first": "Барселона",
+             "home_second": "Барселона", "away_second": "Ньюкасл",
+             "first_score": "1:1", "second_score": "—"},
+            {"home_first": "Байер", "away_first": "Арсенал",
+             "home_second": "Арсенал", "away_second": "Байер",
+             "first_score": "1:1", "second_score": "—"},
+            {"home_first": "Буде-Глимт", "away_first": "Спортинг",
+             "home_second": "Спортинг", "away_second": "Буде-Глимт",
+             "first_score": "3:0", "second_score": "—"},
+            {"home_first": "ПСЖ", "away_first": "Челси",
+             "home_second": "Челси", "away_second": "ПСЖ",
+             "first_score": "5:2", "second_score": "—"},
+            {"home_first": "Реал Мадрид", "away_first": "Манчестер Сити",
+             "home_second": "Манчестер Сити", "away_second": "Реал Мадрид",
+             "first_score": "3:0", "second_score": "—"}
+        ]
+    },
+    "quarterfinals": {
+        "name": "1/4 финала",
+        "dates": "7–8 и 14–15 апреля 2026",
+        "matches": [{"info": "Жеребьёвка 1/4 финала пройдёт после завершения 1/8 финала"}]
+    },
+    "semifinals": {
+        "name": "1/2 финала",
+        "dates": "28–29 апреля и 5–6 мая 2026",
+        "matches": [{"info": "Пары полуфиналистов определятся по итогам 1/4 финала"}]
+    },
+    "final": {
+        "name": "ФИНАЛ",
+        "date": "30 мая 2026, Будапешт (Пушкаш Арена)",
+        "match": {"info": "Финалисты станут известны позднее"}
+    }
+}
+
+# ================== МЕНЮ ==================
+def main_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏴󠁧󠁢󠁥󠁮󠁧󠁿 АПЛ", callback_data="league_apl"),
+         InlineKeyboardButton("🇪🇸 Ла Лига", callback_data="league_laliga")],
+        [InlineKeyboardButton("🇩🇪 Бундеслига", callback_data="league_bundesliga"),
+         InlineKeyboardButton("🇮🇹 Серия А", callback_data="league_seriea")],
+        [InlineKeyboardButton("🏆 Лига Чемпионов", callback_data="league_ucl")],
+        [InlineKeyboardButton("🔴 LIVE матчи", callback_data="live")],
+        [InlineKeyboardButton("⚽ Голы и карточки LIVE", callback_data="goal_live")],
+        [InlineKeyboardButton("⭐ Мои подписки", callback_data="my_subs")]
+    ])
+
+def league_menu(league_key):
+    league = LEAGUES[league_key]
+    if league_key == "ucl":
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏆 Плей-офф 2025/26", callback_data="ucl_playoff")],
+            [InlineKeyboardButton("📅 Матчи (48ч)", callback_data=f"matches_{league_key}")],
+            [InlineKeyboardButton("📊 Таблица", callback_data=f"table_{league_key}")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]
+        ])
+    else:
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("📅 Матчи (48ч)", callback_data=f"matches_{league_key}")],
+            [InlineKeyboardButton("📊 Таблица", callback_data=f"table_{league_key}")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]
+        ])
+
+# ================== START ==================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    await update_user_stats(user.id, user.first_name, user.username)
+    await update.message.reply_text(
+        "⚽ <b>Футбольный бот PRO</b>\n\n<i>Выберите лигу:</i>",
+        parse_mode=ParseMode.HTML,
+        reply_markup=main_menu()
+    )
+
+# ================== МАТЧИ ЗА 48 ЧАСОВ ==================
+async def matches_next_48h(update, league_key):
+    user = update.from_user
+    await update_user_stats(user.id, user.first_name, user.username)
+
+    league = LEAGUES[league_key]
+    date_from = datetime.now().strftime("%Y-%m-%d")
+    date_to = (datetime.now() + timedelta(hours=48)).strftime("%Y-%m-%d")
+
+    cache_key = f"matches_{league['id']}_{date_from}_{date_to}"
+    cached_matches = cache['matches'].get(cache_key)
+    if cached_matches is not None:
+        matches = cached_matches
+        loading_msg = None
+    else:
+        loading_msg = await update.message.reply_text(f"⏳ Загружаю матчи {league['name']}...")
+        matches = await fetch_matches(league["id"], date_from, date_to)
+
+    back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]])
+
+    if not matches:
+        text = f"📅 <b>{league['logo']} {league['name']}</b>\n\n<i>Нет матчей с {date_from} по {date_to}</i>"
+        if loading_msg:
+            await loading_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
+        else:
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
+        return
+
+    text = f"{league['logo']} <b>МАТЧИ {league['name']}</b>\n"
+    text += f"<i>{date_from} – {date_to} (МСК)</i>\n\n"
+
+    for match in matches:
+        msk_time = utc_to_msk(match["utcDate"])
+        if msk_time:
+            time_str = msk_time.strftime("%H:%M")
+            date_str = msk_time.strftime("%d.%m")
+        else:
+            time_str = "??:??"
+            date_str = "??.??"
+
+        home = match["homeTeam"]["name"]
+        away = match["awayTeam"]["name"]
+        status = match["status"]
+
+        if status == "FINISHED":
+            score_h = match["score"]["fullTime"]["home"] or 0
+            score_a = match["score"]["fullTime"]["away"] or 0
+            text += f"✅ {date_str} {time_str}  <b>{home}</b> {score_h}-{score_a} <b>{away}</b>\n"
+        elif status in ["IN_PLAY", "PAUSED"]:
+            text += f"🔴 {date_str} {time_str}  <b>{home}</b> vs <b>{away}</b> (в игре)\n"
+        else:
+            text += f"⏳ {date_str} {time_str}  <b>{home}</b> vs <b>{away}</b>\n"
+
+    if loading_msg:
+        await loading_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
     else:
         await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
 
-# ================== ТАБЛИЦА (с премиум-цифрами) ==================
-# ================== ТАБЛИЦА (со стандартными цифрами 1️⃣2️⃣3️⃣) ==================
+# ================== ТАБЛИЦА ==================
 async def show_table(update, league_key):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -220,9 +401,7 @@ async def show_table(update, league_key):
             await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
         return
 
-    # Формируем таблицу с премиум-эмодзи, если есть
     text = f"{league['logo']} <b>ТАБЛИЦА {league['name']}</b>\n\n"
-    for row in table[:9]:
     for row in table[:9]:  # первые 9 мест
         pos = row["position"]
         team = row["team"]["name"]
@@ -232,23 +411,13 @@ async def show_table(update, league_key):
         draw = row["draw"]
         lost = row["lost"]
 
-        # Пробуем использовать премиум-эмодзи
-        if pos in DIGIT_EMOJIS:
-            pos_emoji = f'<tg-emoji emoji-id="{DIGIT_EMOJIS[pos]}">{pos}</tg-emoji>'
-            text += f"{pos_emoji} <b>{team}</b>\n"
-        else:
-            text += f"<b>{pos}.</b> {team}\n"
-        # Используем стандартные эмодзи-цифры (1️⃣, 2️⃣, 3️⃣ …)
+        # Используем стандартные эмодзи-цифры (без премиум, для надёжности)
         pos_emoji = {
             1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣",
             6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣"
         }.get(pos, f"{pos}.")
         text += f"{pos_emoji} <b>{team}</b>\n"
         text += f"   {pts} очков | И:{played} В:{won} Н:{draw} П:{lost}\n\n"
-
-    # Отладочный вывод
-    print(f"Длина текста таблицы: {len(text)} символов")
-    print(f"Текст таблицы (начало): {text[:500]}")
 
     # Пытаемся отправить с HTML
     try:
@@ -258,13 +427,9 @@ async def show_table(update, league_key):
             await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard)
     except Exception as e:
         print(f"❌ Ошибка при отправке таблицы с HTML: {e}")
-        # Если ошибка, пробуем отправить без HTML (обычный текст)
         # Если ошибка, отправляем без HTML
         plain_text = re.sub(r'<[^>]+>', '', text)
         try:
-            # Убираем все HTML-теги
-            import re
-            plain_text = re.sub(r'<[^>]+>', '', text)
             if loading_msg:
                 await loading_msg.edit_text(plain_text, reply_markup=back_keyboard)
             else:
@@ -273,7 +438,7 @@ async def show_table(update, league_key):
         except Exception as e2:
             print(f"❌ Не удалось отправить даже обычный текст: {e2}")
 
-# ================== LIVE МАТЧИ (с премиум-мячом) ==================
+# ================== LIVE МАТЧИ ==================
 async def live_matches(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -340,7 +505,6 @@ async def goal_live_menu(update):
         home_ru = translate_team(home)
         away_ru = translate_team(away)
         text += f"• {home_ru} vs {away_ru} ({league})\n"
-        # В кнопках нельзя HTML, оставляем обычный 🔔
         keyboard.append([InlineKeyboardButton(
             f"🔔 {home_ru} – {away_ru}",
             callback_data=f"goal_sub_{match_id}"
@@ -378,7 +542,7 @@ async def goal_unsubscribe(update, match_id):
         reply_markup=main_menu()
     )
 
-# ================== ЛИГА ЧЕМПИОНОВ (СТАТИЧЕСКАЯ, С ДОМИКОМ) ==================
+# ================== ЛИГА ЧЕМПИОНОВ ==================
 async def ucl_playoff(update):
     user = update.from_user
     await update_user_stats(user.id, user.first_name, user.username)
@@ -550,11 +714,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_table(query, league_key)
         return
 
-    if data.startswith("teams_"):
-        league_key = data.replace("teams_", "")
-        await show_league_teams(query, league_key)
-        return
-
     if data == "ucl_playoff":
         await ucl_playoff(query)
         return
@@ -575,6 +734,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("goal_unsub_"):
         match_id = int(data.replace("goal_unsub_", ""))
         await goal_unsubscribe(query, match_id)
+        return
+
+    if data.startswith("teams_"):
+        league_key = data.replace("teams_", "")
+        await show_league_teams(query, league_key)
         return
 
     if data == "my_subs":
@@ -659,7 +823,6 @@ async def match_checker(app):
                     last_scores[fixture_id] = score
 
         except Exception as e:
-            import traceback
             print(f"❌ Ошибка в match_checker: {e}")
             traceback.print_exc()
 
@@ -711,8 +874,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================== ЗАПУСК ==================
 def main():
     print("=" * 60)
-    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (премиум-эмодзи + статическая ЛЧ)")
-    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (премиум-эмодзи, таблицы с цифрами)")
+    print("⚽ ФУТБОЛЬНЫЙ БОТ PRO (премиум-эмодзи, статическая ЛЧ)")
     print("=" * 60)
     print("✅ Таблицы и расписание: football-data.org")
     print("✅ Live-матчи и события: football-data.org")
