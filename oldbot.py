@@ -11,7 +11,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 # ================== НАСТРОЙКИ ==================
 TELEGRAM_TOKEN = "7728656883:AAEme21mHObvqMOoifogEYRi3LTyk2W5bE"
 FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6ba9f95fb95ce0deb0"
-RAPIDAPI_KEY = "582804ef23f7c43934b59be585002683"  # ключ для API-FOOTBALL (ЛЧ)
+RAPIDAPI_KEY = "7728656883:AAERNHyCW90kEVSZlyAe61EDrSigb98l1qE"  # ключ для API-FOOTBALL (ЛЧ)
 
 # ID лиг в football-data.org
 LEAGUES = {
