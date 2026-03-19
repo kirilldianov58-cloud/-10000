@@ -739,7 +739,7 @@ async def match_checker(app):
         await asyncio.sleep(30)
 
 # ================== СТАТИСТИКА (ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА) ==================
-OWNER_ID = 6298119477  # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID
+OWNER_ID = 6298119477 # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -803,4 +803,4 @@ def main():
     app.run_polling()
 
 if __name__ == "__main__":
-    main() 
+    main()
