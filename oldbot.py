@@ -12,7 +12,7 @@ import telegram
 print(f"🔍 Версия python-telegram-bot: {telegram.__version__}")
 
 # ================== НАСТРОЙКИ ==================
-TELEGRAM_TOKEN = ""7728656883:AAERNHyCW90kEVSZlyAe61EDrSigb98l1qE""
+TELEGRAM_TOKEN = "7728656883:AAERNHyCW90kEVSZlyAe61EDrSigb98l1qE"
 FOOTBALL_DATA_TOKEN = "ec0171bdf2db4f6baf095fb95ce0deb0"
 OWNER_ID = 6298119477  # ⚠️ ЗАМЕНИТЕ НА СВОЙ USER ID
 
